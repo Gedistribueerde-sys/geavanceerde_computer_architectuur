@@ -7,7 +7,7 @@
 #include <cstdint>      // Data types
 #include <iostream>     // File operations
 #include <cuda_runtime.h>
-
+#include <chrono>
 // #define M 512       // Lenna width
 // #define N 512       // Lenna height
 #define M 960       // VR width
@@ -116,9 +116,11 @@ int main (void) {
     int threadsPerBlock = 256;
     int blocksPerGrid = (M * N * C + threadsPerBlock - 1) / threadsPerBlock;
     std::cout << "Num of threads: " << threadsPerBlock << " Num of blocks: " << blocksPerGrid << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
     convert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, img_size);
-
-
+    auto stop = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = stop - start;
+    std::cout << "Kernel execution time: " << elapsed.count() << " ms" << std::endl;
     cudaMemcpy(new_image_array, d_output, img_size, cudaMemcpyDeviceToHost);
 
     
