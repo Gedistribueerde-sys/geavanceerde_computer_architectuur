@@ -1,12 +1,7 @@
-/* 
- * Code snippet for importing / exporting image data.
- * 
- * To convert an image to a pixel map, run `convert <name>.<extension> <name>.ppm
- * 
- */
 #include <cstdint>      // Data types
 #include <iostream>     // File operations
 #include <cuda_runtime.h>
+#include <vector>       // For testing different thread counts
 
 // #define M 512       // Lenna width
 // #define N 512       // Lenna height
@@ -88,43 +83,108 @@ __global__ void invert_image(uint8_t* input_img, uint8_t* output_img, int total_
 
 }
 
+void run_performance_test(const std::string& title, 
+                          const std::vector<int>& thread_counts,
+                          uint8_t* d_input, 
+                          uint8_t* d_output, 
+                          int total_elements, 
+                          cudaEvent_t& start, 
+                          cudaEvent_t& stop) 
+{
+    std::cout << "--- " << title << " ---" << std::endl;
+    std::cout << "Threads/Block | Blocks/Grid | Time (ms)" << std::endl;
+    std::cout << "---------------------------------------" << std::endl;
+
+    for (int threadsPerBlock : thread_counts) {
+        
+        // Calculate grid size
+        int blocksPerGrid = (total_elements + threadsPerBlock - 1) / threadsPerBlock;
+        
+        // Record start time
+        cudaEventRecord(start);
+        
+        // Launch the kernel
+        invert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, total_elements);
+        
+        // Record stop time and synchronize
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        
+        // Calculate elapsed time
+        float milliseconds = 0;
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        
+        // Print results
+        printf("%-13d | %-11d | %f\n", threadsPerBlock, blocksPerGrid, milliseconds);
+    }
+    
+    std::cout << "---------------------------------------\n" << std::endl;
+}
+
 
 int main (void) {
     
     // Read the image
     uint8_t* image_array = get_image_array();
     
-    // Allocate output
+    // Allocate host output memory
     uint8_t* new_image_array = (uint8_t*)malloc(M*N*C);
+    if (new_image_array == NULL) {
+        perror("ERROR: Cannot allocate host output memory");
+        exit(EXIT_FAILURE);
+    }
 
+    // Allocate device memory
     uint8_t *d_input, *d_output;
     size_t img_size = M * N * C * sizeof(uint8_t);
+    int total_elements = M * N * C; // Use this for calculations
 
     cudaMalloc((void**)&d_input, img_size);
     cudaMalloc((void**)&d_output, img_size);
 
+    // Copy image from host to device
     cudaMemcpy(d_input, image_array, img_size, cudaMemcpyHostToDevice);
-    
-    // Convert to grayscale using only the red color component
-    // for(int i=0; i<M*N*C; i++){
-    //     new_image_array[i] = image_array[i/3*3];
-    // }
 
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (M * N * C + threadsPerBlock - 1) / threadsPerBlock;
-    std::cout << "Num of threads: " << threadsPerBlock << " Num of blocks: " << blocksPerGrid << std::endl;
-    invert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, img_size);
+    // Create CUDA events for timing
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
+    // Define the different thread counts
+    std::vector<int> threads_full_warp = {32, 64, 128, 256, 512, 1024};
+    std::vector<int> threads_partial_warp = {16, 20, 100, 200, 400};
 
+    // --- Performance ---
+    std::cout << "Image size: " << M << "x" << N << std::endl << std::endl;
+
+    // Run the tests using the helper function
+    run_performance_test("Performance Full Warps", 
+                         threads_full_warp, 
+                         d_input, d_output, 
+                         total_elements, 
+                         start, stop);
+
+    run_performance_test("Performance Partial Warps", 
+                         threads_partial_warp, 
+                         d_input, d_output, 
+                         total_elements, 
+                         start, stop);
+
+    // Destroy events
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    // Copy the final result (from the last run) back to host
     cudaMemcpy(new_image_array, d_output, img_size, cudaMemcpyDeviceToHost);
-
     
-    // Save the image
+    // Save the inverted image
     save_image_array(new_image_array);
 
-
+    // Free all allocated memory
     cudaFree(d_input);
     cudaFree(d_output);
+    free(new_image_array);
+    free(image_array - OFFSET); // Correctly free the original image pointer
     
     return 0;
 }
