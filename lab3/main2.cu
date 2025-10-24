@@ -1,13 +1,7 @@
-/* 
- * Code snippet for importing / exporting image data.
- * 
- * To convert an image to a pixel map, run `convert <name>.<extension> <name>.ppm
- * 
- */
 #include <cstdint>      // Data types
 #include <iostream>     // File operations
 #include <cuda_runtime.h>
-#include <chrono>
+
 // #define M 512       // Lenna width
 // #define N 512       // Lenna height
 #define M 960       // VR width
@@ -91,54 +85,43 @@ __global__ void convert_image(uint8_t* input_img, uint8_t* output_img, int total
 
 }
 
-/ ---- MAIN ----
-int main() {
-    const int totalPixels = M * N * C;
-    const size_t totalBytes = totalPixels * sizeof(uint8_t);
 
-    // lees invoerbeeld
-    uint8_t* h_in = get_image_array();
-    uint8_t* h_out = (uint8_t*)malloc(totalBytes);
+int main (void) {
+    
+    // Read the image
+    uint8_t* image_array = get_image_array();
+    
+    // Allocate output
+    uint8_t* new_image_array = (uint8_t*)malloc(M*N*C);
 
-    // device geheugen
-    uint8_t *d_in, *d_out;
-    cudaCheck(cudaMalloc(&d_in, totalBytes));
-    cudaCheck(cudaMalloc(&d_out, totalBytes));
-    cudaCheck(cudaMemcpy(d_in, h_in, totalBytes, cudaMemcpyHostToDevice));
+    uint8_t *d_input, *d_output;
+    size_t img_size = M * N * C * sizeof(uint8_t);
 
-    // events voor timing
-    cudaEvent_t start, stop;
-    cudaCheck(cudaEventCreate(&start));
-    cudaCheck(cudaEventCreate(&stop));
+    cudaMalloc((void**)&d_input, img_size);
+    cudaMalloc((void**)&d_output, img_size);
 
-    int threads = 256;
-    int blocks = (totalPixels + threads - 1) / threads;
+    cudaMemcpy(d_input, image_array, img_size, cudaMemcpyHostToDevice);
+    
+    // Convert to grayscale using only the red color component
+    // for(int i=0; i<M*N*C; i++){
+    //     new_image_array[i] = image_array[i/3*3];
+    // }
 
-    // meet uitvoeringstijd
-    cudaEventRecord(start);
-    convert_image<<<blocks, threads>>>(d_in, d_out, N, M);
-    cudaEventRecord(stop);
-    cudaCheck(cudaEventSynchronize(stop));
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (M * N * C + threadsPerBlock - 1) / threadsPerBlock;
+    std::cout << "Num of threads: " << threadsPerBlock << " Num of blocks: " << blocksPerGrid << std::endl;
+    convert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, img_size);
 
-    float ms = 0;
-    cudaCheck(cudaEventElapsedTime(&ms, start, stop));
 
-    std::cout << "Thread divergence kernel time: " << ms << " ms\n";
+    cudaMemcpy(new_image_array, d_output, img_size, cudaMemcpyDeviceToHost);
 
-    // kopieer resultaat terug
-    cudaCheck(cudaMemcpy(h_out, d_out, totalBytes, cudaMemcpyDeviceToHost));
+    
+    // Save the image
+    save_image_array(new_image_array);
 
-    // opslaan
-    save_image_array(h_out, "output_divergence.ppm");
 
-    // cleanup
-    cudaFree(d_in);
-    cudaFree(d_out);
-    free(h_in);
-    free(h_out);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-
-    std::cout << "Output saved as output_divergence.ppm\n";
+    cudaFree(d_input);
+    cudaFree(d_output);
+    
     return 0;
 }
