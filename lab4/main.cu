@@ -161,4 +161,39 @@ int main (void) {
 
     std::cout << "\nRunning invertRedUncoalesced kernel..." << std::endl;
     cudaEventRecord(startUncoalesced, 0);
-    invertRedUnco
+    invertRedUncoalesced<<<gridSize, blockSize>>>(red_channel_device, M, N);
+    cudaEventRecord(stopUncoalesced, 0);
+    cudaEventSynchronize(stopUncoalesced);
+
+    float millisecondsUncoalesced = 0;
+    cudaEventElapsedTime(&millisecondsUncoalesced, startUncoalesced, stopUncoalesced);
+    std::cout << "Time for invertRedUncoalesced: " << millisecondsUncoalesced << " ms" << std::endl;
+
+    // Copy the inverted red channel back to host
+    cudaMemcpy(red_channel_host, red_channel_device, M * N * sizeof(uint8_t), cudaMemcpyDeviceToHost);
+
+    // Reconstruct the image with the inverted red channel for uncoalesced version
+    uint8_t* output_image_uncoalesced = (uint8_t*)malloc(M * N * C * sizeof(uint8_t));
+    for (int i = 0; i < M * N; ++i) {
+        output_image_uncoalesced[i * C] = red_channel_host[i];       // Inverted Red
+        output_image_uncoalesced[i * C + 1] = image_array_host[i * C + 1]; // Original Green
+        output_image_uncoalesced[i * C + 2] = image_array_host[i * C + 2]; // Original Blue
+    }
+    // You might want to save this to a different file name, e.g., "output_uncoalesced.ppm"
+    // For now, it will overwrite "output_image.ppm" or you can comment this out.
+    // save_image_array(output_image_uncoalesced);
+
+
+    // Clean up
+    cudaFree(red_channel_device);
+    free(red_channel_host);
+    free(image_array_host);
+    free(output_image_coalesced);
+    free(output_image_uncoalesced);
+    cudaEventDestroy(startCoalesced);
+    cudaEventDestroy(stopCoalesced);
+    cudaEventDestroy(startUncoalesced);
+    cudaEventDestroy(stopUncoalesced);
+
+    return 0;
+}
