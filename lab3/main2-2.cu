@@ -1,8 +1,13 @@
+/* 
+ * Code snippet for importing / exporting image data.
+ * 
+ * To convert an image to a pixel map, run `convert <name>.<extension> <name>.ppm
+ * 
+ */
 #include <cstdint>      // Data types
 #include <iostream>     // File operations
 #include <cuda_runtime.h>
 #include <chrono>
-
 // #define M 512       // Lenna width
 // #define N 512       // Lenna height
 #define M 960       // VR width
@@ -77,8 +82,8 @@ void save_image_array(uint8_t* image_array){
 __global__ void convert_image(uint8_t* input_img, uint8_t* output_img, int total_size){
     int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
-    if (tid >1 && tid < total_size -2 && tid % 3 == 0){
-        output_img[tid] = 0.1 * input_img[tid - 2*3] + 0.25 * input_img[tid - 1*3] + 0.5 * input_img[tid] + 0.25 * input_img[tid + 1*3] + 0.1 * input_img[tid + 2*3];
+    if (tid >1 && tid < total_size/3 -2 ){
+        output_img[tid] = 0.1 * input_img[tid - 2] + 0.25 * input_img[tid - 1] + 0.5 * input_img[tid] + 0.25 * input_img[tid + 1] + 0.1 * input_img[tid + 2];
     } else if (tid < total_size){
         output_img[tid] = 255 - input_img[tid];
     }
@@ -86,11 +91,20 @@ __global__ void convert_image(uint8_t* input_img, uint8_t* output_img, int total
 
 }
 
-
 int main (void) {
     
     // Read the image
     uint8_t* image_array = get_image_array();
+
+    // Allocate planar array
+    uint8_t* planar_format = (uint8_t*)malloc(M * N * C * sizeof(uint8_t));
+
+    for (int i = 0; i < M * N; i += 1){
+        planar_format[i] = image_array[i*3]; // RRR
+        planar_format[i + (M*N)] = image_array[i*3+1]; // GGG
+        planar_format[i + (M*N*2)] = image_array[i*3+2]; // BBB
+    }
+
     
     // Allocate output
     uint8_t* new_image_array = (uint8_t*)malloc(M*N*C);
@@ -111,13 +125,11 @@ int main (void) {
     int threadsPerBlock = 256;
     int blocksPerGrid = (M * N * C + threadsPerBlock - 1) / threadsPerBlock;
     std::cout << "Num of threads: " << threadsPerBlock << " Num of blocks: " << blocksPerGrid << std::endl;
-
     auto start = std::chrono::high_resolution_clock::now();
     convert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, img_size);
     auto stop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> elapsed = stop - start;
     std::cout << "Kernel execution time: " << elapsed.count() << " ms" << std::endl;
-
     cudaMemcpy(new_image_array, d_output, img_size, cudaMemcpyDeviceToHost);
 
     
