@@ -80,7 +80,16 @@ __global__ void invert_image(uint8_t* input_img, uint8_t* output_img, int total_
     if (tid < total_size){
         output_img[tid] = 255 - input_img[tid];
     }
+}
 
+__global__ void invert_image_stride(uint8_t* input_img, uint8_t* output_img, int total_size){
+    int index = threadIdx.x + blockDim.x * blockIdx.x;
+
+    int stride = blockDim.x * gridDim.x;
+
+    for (int i = index; i < total_size; i += stride) {
+        output_img[i] = 255 - input_img[i];
+    }
 }
 
 void run_performance_test(const std::string& title, 
@@ -89,38 +98,81 @@ void run_performance_test(const std::string& title,
                           uint8_t* d_output, 
                           int total_elements, 
                           cudaEvent_t& start, 
-                          cudaEvent_t& stop) 
+                          cudaEvent_t& stop,
+                          int num_iterations)
 {
-    std::cout << "--- " << title << " ---" << std::endl;
-    std::cout << "Threads/Block | Blocks/Grid | Time (ms)" << std::endl;
-    std::cout << "---------------------------------------" << std::endl;
+    std::cout << "--- " << title << " (Avg. over " << num_iterations << " runs) ---" << std::endl;
+    std::cout << "Threads/Block | Blocks/Grid | Avg. Time (ms)" << std::endl;
+    std::cout << "-----------------------------------------------" << std::endl;
 
     for (int threadsPerBlock : thread_counts) {
         
-        // Calculate grid size
         int blocksPerGrid = (total_elements + threadsPerBlock - 1) / threadsPerBlock;
         
-        // Record start time
-        cudaEventRecord(start);
+        double total_milliseconds = 0.0;
+
+        // for loop for averaging
+        for (int i = 0; i < num_iterations; ++i) {
+            cudaEventRecord(start);
+            
+            invert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, total_elements);
+            
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+            
+            float milliseconds = 0;
+            cudaEventElapsedTime(&milliseconds, start, stop);
+            total_milliseconds += milliseconds;
+        }
+
+        float avg_milliseconds = (float)(total_milliseconds / num_iterations);
         
-        // Launch the kernel
-        invert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, total_elements);
-        
-        // Record stop time and synchronize
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        
-        // Calculate elapsed time
-        float milliseconds = 0;
-        cudaEventElapsedTime(&milliseconds, start, stop);
-        
-        // Print results
-        printf("%-13d | %-11d | %f\n", threadsPerBlock, blocksPerGrid, milliseconds);
+        printf("%-13d | %-11d | %f\n", threadsPerBlock, blocksPerGrid, avg_milliseconds);
     }
     
-    std::cout << "---------------------------------------\n" << std::endl;
+    std::cout << "-----------------------------------------------\n" << std::endl;
 }
 
+
+void run_striding_performance_test(const std::string& title, 
+                          const std::vector<int>& thread_counts,
+                          uint8_t* d_input, 
+                          uint8_t* d_output, 
+                          int total_elements, 
+                          cudaEvent_t& start, 
+                          cudaEvent_t& stop,
+                          int num_iterations)
+{
+    std::cout << "--- " << title << " (Avg. over " << num_iterations << " runs) ---" << std::endl;
+    std::cout << "Threads/Block | Blocks/Grid | Avg. Time (ms)" << std::endl;
+    std::cout << "-----------------------------------------------" << std::endl;
+
+    for (int threadsPerBlock: thread_counts) {
+        int numThreads = total_elements / 16;
+        int blocksPerGrid = (numThreads + threadsPerBlock - 1) / threadsPerBlock;
+
+        double total_milliseconds = 0.0;
+
+        for (int i = 0; i < num_iterations; ++i) {
+            cudaEventRecord(start);
+
+            invert_image_stride<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, total_elements);
+
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+
+            float milliseconds = 0; 
+            cudaEventElapsedTime(&milliseconds, start, stop);
+            total_milliseconds += milliseconds;
+        }
+
+        float avg_milliseconds = (float)(total_milliseconds / num_iterations);
+
+        printf("%-13d | %-11d | %f\n", threadsPerBlock, blocksPerGrid, avg_milliseconds);
+    }
+
+    std::cout << "-----------------------------------------------\n" << std::endl;
+}
 
 int main (void) {
     
@@ -137,7 +189,7 @@ int main (void) {
     // Allocate device memory
     uint8_t *d_input, *d_output;
     size_t img_size = M * N * C * sizeof(uint8_t);
-    int total_elements = M * N * C; // Use this for calculations
+    int total_elements = M * N * C;
 
     cudaMalloc((void**)&d_input, img_size);
     cudaMalloc((void**)&d_output, img_size);
@@ -154,22 +206,35 @@ int main (void) {
     std::vector<int> threads_full_warp = {32, 64, 128, 256, 512, 1024};
     std::vector<int> threads_partial_warp = {16, 20, 100, 200, 400};
 
-    // --- Performance ---
+    // Testing execution times
     std::cout << "Image size: " << M << "x" << N << std::endl << std::endl;
 
-    // Run the tests using the helper function
+    int num_iterations = 100;
     run_performance_test("Performance Full Warps", 
-                         threads_full_warp, 
-                         d_input, d_output, 
-                         total_elements, 
-                         start, stop);
+        threads_full_warp, 
+        d_input, d_output, 
+        total_elements, 
+        start, stop, num_iterations);
 
     run_performance_test("Performance Partial Warps", 
-                         threads_partial_warp, 
-                         d_input, d_output, 
-                         total_elements, 
-                         start, stop);
+        threads_partial_warp, 
+        d_input, d_output, 
+        total_elements, 
+        start, stop, num_iterations);
 
+    run_striding_performance_test("Performance Full Warps - Striding",
+        threads_full_warp,
+        d_input, d_output,
+        total_elements,
+        start, stop, num_iterations);
+
+    run_striding_performance_test("Performance Partial Warps - Striding",
+        threads_partial_warp,
+        d_input, d_output,
+        total_elements,
+        start, stop, num_iterations);
+
+   
     // Destroy events
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
