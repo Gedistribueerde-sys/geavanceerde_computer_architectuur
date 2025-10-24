@@ -91,45 +91,88 @@ __global__ void convert_image(uint8_t* input_img, uint8_t* output_img, int total
 
 }
 
+int main() {
+    // --- Setup image buffers (your code) ---
+    uint8_t* image_array = get_image_array(); // assume returns M*N*C bytes
+    const size_t img_size = M * N * C * sizeof(uint8_t);
 
-int main (void) {
-    
-    // Read the image
-    uint8_t* image_array = get_image_array();
-    
-    // Allocate output
-    uint8_t* new_image_array = (uint8_t*)malloc(M*N*C);
+    uint8_t* new_image_array = (uint8_t*)std::malloc(img_size);
+    if (!new_image_array) { std::cerr << "malloc failed\n"; return 1; }
 
-    uint8_t *d_input, *d_output;
-    size_t img_size = M * N * C * sizeof(uint8_t);
+    uint8_t *d_input = nullptr, *d_output = nullptr;
+    CUDA_CHECK(cudaMalloc((void**)&d_input,  img_size));
+    CUDA_CHECK(cudaMalloc((void**)&d_output, img_size));
+    CUDA_CHECK(cudaMemcpy(d_input, image_array, img_size, cudaMemcpyHostToDevice));
 
-    cudaMalloc((void**)&d_input, img_size);
-    cudaMalloc((void**)&d_output, img_size);
+    // --- Decide sweep of threads-per-block, capped by device capability ---
+    cudaDeviceProp prop{};
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, 0));
+    const int maxTPB = prop.maxThreadsPerBlock; // commonly 1024
 
-    cudaMemcpy(d_input, image_array, img_size, cudaMemcpyHostToDevice);
-    
-    // Convert to grayscale using only the red color component
-    // for(int i=0; i<M*N*C; i++){
-    //     new_image_array[i] = image_array[i/3*3];
-    // }
+    std::vector<int> tpb_candidates = {32, 64, 128, 256, 512, 1024};
+    tpb_candidates.erase(
+        std::remove_if(tpb_candidates.begin(), tpb_candidates.end(),
+                       [&](int t){ return t > maxTPB; }),
+        tpb_candidates.end());
 
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (M * N * C + threadsPerBlock - 1) / threadsPerBlock;
-    std::cout << "Num of threads: " << threadsPerBlock << " Num of blocks: " << blocksPerGrid << std::endl;
-    auto start = std::chrono::high_resolution_clock::now();
-    convert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, img_size);
-    auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> elapsed = stop - start;
-    std::cout << "Kernel execution time: " << elapsed.count() << " ms" << std::endl;
-    cudaMemcpy(new_image_array, d_output, img_size, cudaMemcpyDeviceToHost);
+    // --- Timing setup ---
+    const int warmup_runs = 5;
+    const int timed_runs  = 30;
 
-    
-    // Save the image
+    std::cout << "device: " << prop.name << "\n";
+    std::cout << "img_size (bytes): " << img_size << "\n";
+    std::cout << "TPB, Blocks, Avg_ms, StdDev_ms\n";
+
+    for (int threadsPerBlock : tpb_candidates) {
+        const size_t nElems = img_size / sizeof(uint8_t); // number of pixels/bytes
+        const int blocksPerGrid = static_cast<int>((nElems + threadsPerBlock - 1) / threadsPerBlock);
+
+        // warm-up (not timed)
+        for (int i = 0; i < warmup_runs; ++i) {
+            convert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, nElems);
+        }
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        // events for timing
+        cudaEvent_t startEvt, stopEvt;
+        CUDA_CHECK(cudaEventCreate(&startEvt));
+        CUDA_CHECK(cudaEventCreate(&stopEvt));
+
+        std::vector<float> times_ms;
+        times_ms.reserve(timed_runs);
+
+        for (int r = 0; r < timed_runs; ++r) {
+            CUDA_CHECK(cudaEventRecord(startEvt, 0));
+            convert_image<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, nElems);
+            CUDA_CHECK(cudaEventRecord(stopEvt, 0));
+            CUDA_CHECK(cudaEventSynchronize(stopEvt));
+
+            float ms = 0.0f;
+            CUDA_CHECK(cudaEventElapsedTime(&ms, startEvt, stopEvt)); // milliseconds
+            times_ms.push_back(ms);
+        }
+
+        CUDA_CHECK(cudaEventDestroy(startEvt));
+        CUDA_CHECK(cudaEventDestroy(stopEvt));
+
+        // stats: average + stddev
+        const double sum = std::accumulate(times_ms.begin(), times_ms.end(), 0.0);
+        const double avg = sum / times_ms.size();
+        double var = 0.0;
+        for (float t : times_ms) { double d = t - avg; var += d * d; }
+        var /= times_ms.size();
+        const double stddev = std::sqrt(var);
+
+        std::cout << threadsPerBlock << ", " << blocksPerGrid << ", "
+                  << avg << ", " << stddev << "\n";
+    }
+
+    // Optionally copy back once (not timed)
+    CUDA_CHECK(cudaMemcpy(new_image_array, d_output, img_size, cudaMemcpyDeviceToHost));
     save_image_array(new_image_array);
 
-
-    cudaFree(d_input);
-    cudaFree(d_output);
-    
+    CUDA_CHECK(cudaFree(d_input));
+    CUDA_CHECK(cudaFree(d_output));
+    std::free(new_image_array);
     return 0;
 }
