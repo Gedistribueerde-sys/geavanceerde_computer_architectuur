@@ -1,35 +1,39 @@
-/*
- * Code snippet for importing / exporting image data.
- *
- * To convert an image to a pixel map, run `convert <name>.<extension> <name>.ppm
- *
- */
 #include <cstdint>      // Data types
 #include <iostream>     // File operations
+#include <iomanip>      // For std::setw, std::setprecision
+#include <cstdlib>      // For malloc, free, srand, rand
+#include <ctime>        // For time()
 #include <cuda_runtime.h> // CUDA Runtime API
 
+// --- Image Dimensions ---
 // #define M 512       // Lenna width
 // #define N 512       // Lenna height
 #define M 960       // VR width
-#define N 1280       // VR height
+#define N 1280      // VR height
 #define C 3         // Colors
 #define OFFSET 16   // Header length
 
+// --- CUDA Error Checking Utility ---
+#define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
+void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line) {
+    if (result) {
+        std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
+            file << ":" << line << " '" << func << "' \n";
+        cudaDeviceReset();
+        exit(99);
+    }
+}
 
-uint8_t* get_image_array(void){
-    /*
-     * Get the data of an (RGB) image as a 1D array.
-     *
-     * Returns: Flattened image array.
-     *
-     * Noets:
-     *  - Images data is flattened per color, column, row.
-     *  - The first 3 data elements are the RGB components
-     *  - The first 3*M data elements represent the firts row of the image
-     *  - For example, r_{0,0}, g_{0,0}, b_{0,0}, ..., b_{0,M}, r_{1,0}, ..., b_{b,M}, ..., b_{N,M}
-     *
-     */
-    // Try opening the file
+
+// --- Image Loading/Saving ---
+
+/**
+ * @brief Gets the data of an (RGB) image, *including the header*.
+ *
+ * @return The pointer to the very start of the allocated buffer.
+ * This is the pointer you must 'free()' later.
+ */
+uint8_t* get_full_image_buffer(void){
     FILE *imageFile;
     imageFile=fopen("./anna.ppm","rb");
     if(imageFile==NULL){
@@ -37,242 +41,233 @@ uint8_t* get_image_array(void){
         exit(EXIT_FAILURE);
     }
 
-    // Initialize empty image array
-    uint8_t* image_array = (uint8_t*)malloc(M*N*C*sizeof(uint8_t)+OFFSET);
+    // Allocate memory for the *entire* file (header + data)
+    uint8_t* full_buffer = (uint8_t*)malloc(M*N*C*sizeof(uint8_t)+OFFSET);
+    if (!full_buffer) {
+         perror("ERROR: Cannot allocate memory");
+         exit(EXIT_FAILURE);
+    }
 
-    // Read the image
-    fread(image_array, sizeof(uint8_t), M*N*C*sizeof(uint8_t)+OFFSET, imageFile);
+    // Read the image (header + data)
+    fread(full_buffer, sizeof(uint8_t), M*N*C*sizeof(uint8_t)+OFFSET, imageFile);
 
     // Close the file
     fclose(imageFile);
 
-    // Move the starting pointer and return the flattened image array
-    return image_array + OFFSET;
+    // Return the pointer to the START of the allocation
+    return full_buffer;
 }
 
-
 void save_image_array(uint8_t* image_array ,int a){
-    /*
-     * Save the data of an (RGB) image as a pixel map.
-     *
-     * Parameters:
-     *  - param1: The data of an (RGB) image as a 1D array
-     *
-     */
-    // Try opening the file
     FILE *imageFile;
-    if (a ==1)imageFile=fopen("./output_image.ppm","wb");
-    if (a ==2)imageFile=fopen("./output_image2.ppm","wb");
+    if (a == 1) imageFile=fopen("./output_image_coalesced.ppm","wb");
+    if (a == 2) imageFile=fopen("./output_image_uncoalesced.ppm","wb");
     if(imageFile==NULL){
         perror("ERROR: Cannot open output file");
         exit(EXIT_FAILURE);
     }
-
-    // Configure the file
-    fprintf(imageFile,"P6\n");               // P6 filetype
-    fprintf(imageFile,"%d %d\n", M, N);      // dimensions
-    fprintf(imageFile,"255\n");              // Max pixel
-
-    // Write the image
+    fprintf(imageFile,"P6\n");
+    fprintf(imageFile,"%d %d\n", M, N);
+    fprintf(imageFile,"255\n");
+    // Write the image data (M*N*C bytes)
     fwrite(image_array, 1, M*N*C, imageFile);
-
-    // Close the file
     fclose(imageFile);
 }
 
-__global__ void invertRedCoalesced(unsigned char* redChannel, int width, int height) {
+// --- KERNEL 1: COALESCED ---
+// Operates on a PLANAR array (RRR...GGG...BBB...)
+__global__ void invertRedCoalesced(unsigned char* redChannel, int numPixels) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int size = width * height;
-    if (idx < size) {
-        redChannel[idx] = 255 - redChannel[idx];  // Invert red component
+    
+    for (int i = idx; i < numPixels; i += blockDim.x * gridDim.x) {
+        redChannel[i] = 255 - redChannel[i];
     }
 }
 
-__global__ void invertRedUncoalesced(unsigned char* redChannel, int width, int height) {
+// --- KERNEL 2: UNCOALESCED ---
+// Operates on an INTERLEAVED array (RGBRGBRGB...)
+__global__ void invertRedUncoalesced(unsigned char* interleavedImage, int numPixels) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    int size = width * height;
-    int stride = blockDim.x * gridDim.x;
-    for (int i = idx; i < size; i += stride) {
-        redChannel[i] = 255 - redChannel[i];  // Same inversion but uncoalesced access pattern
+
+    for (int i = idx; i < numPixels; i += blockDim.x * gridDim.x) {
+        int redIndex = i * C; // C is 3 (RGB)
+        interleavedImage[redIndex] = 255 - interleavedImage[redIndex];
     }
 }
+
 
 int main (void) {
 
-    // Read the image
-    uint8_t* image_array_host = get_image_array();
-
-    // Allocate memory for the red channel on the host
-    uint8_t* red_channel_host = (uint8_t*)malloc(M * N * sizeof(uint8_t));
-
-    // Extract the red channel from the interleaved RGB array
-    for (int i = 0; i < M * N; ++i) {
-        red_channel_host[i] = image_array_host[i * C]; // Red component is at index 0, 3, 6, ...
-    }
-
-    // Allocate device memory for the red channel
-    uint8_t* red_channel_device;
-    cudaMalloc(&red_channel_device, M * N * sizeof(uint8_t));
-
-    // Copy red channel from host to device
-    cudaMemcpy(red_channel_device, red_channel_host, M * N * sizeof(uint8_t), cudaMemcpyHostToDevice);
-
-    // Define grid and block dimensions
+    // === Part 1: Process the 'anna.ppm' image ===
+    std::cout << "--- Processing Image File (anna.ppm) ---" << std::endl;
+    int numPixels = M * N;
     int blockSize = 256;
-    int gridSize = (M * N + blockSize - 1) / blockSize;
+    int gridSize = (numPixels + blockSize - 1) / blockSize;
 
-    // --- Time invertRedCoalesced kernel ---
-    cudaEvent_t startCoalesced, stopCoalesced;
-    cudaEventCreate(&startCoalesced);
-    cudaEventCreate(&stopCoalesced);
+    // --- KEY FIX FOR CRASH ---
+    // 1. Get the full buffer (starts with header)
+    uint8_t* full_image_buffer_host = get_full_image_buffer();
+    
+    // 2. Get the pointer to the actual pixel data by adding the offset
+    uint8_t* image_array_host_interleaved = full_image_buffer_host + OFFSET;
+    // --- END KEY FIX ---
 
-    std::cout << "Running invertRedCoalesced kernel..." << std::endl;
-    cudaEventRecord(startCoalesced, 0);
-    invertRedCoalesced<<<gridSize, blockSize>>>(red_channel_device, M, N);
-    cudaEventRecord(stopCoalesced, 0);
-    cudaEventSynchronize(stopCoalesced);
-
-    float millisecondsCoalesced = 0;
-    cudaEventElapsedTime(&millisecondsCoalesced, startCoalesced, stopCoalesced);
-    std::cout << "Time for invertRedCoalesced: " << millisecondsCoalesced << " ms" << std::endl;
-
-    // Copy the inverted red channel back to host to save it or use for other operations
-    // Note: If you want to compare coalesced vs uncoalesced, you'll need to reset red_channel_device
-    // or use a separate device array for the uncoalesced version.
-    cudaMemcpy(red_channel_host, red_channel_device, M * N * sizeof(uint8_t), cudaMemcpyDeviceToHost);
-
-    // Reconstruct the image with the inverted red channel for coalesced version
-    // Reconstruct the image with the inverted red channel for coalesced version
-    uint8_t* output_image_coalesced = (uint8_t*)malloc(M * N * C * sizeof(uint8_t));
-    for (int i = 0; i < M * N; ++i) {
-        output_image_coalesced[i * C] = red_channel_host[i];       // Inverted Red
-        output_image_coalesced[i * C + 1] = image_array_host[i * C + 1]; // Original Green
-        output_image_coalesced[i * C + 2] = image_array_host[i * C + 2]; // Original Blue
-    }
-    save_image_array(output_image_coalesced, 1); // Saves as output_image.ppm
-
-    // --- Reset device memory and prepare for invertRedUncoalesced ---
-    // IMPORTANT: Re-extract the original red channel into a temporary host buffer
-    //            or directly from image_array_host to copy to the device.
-    //            The previous cudaMemcpy copied the *inverted* data.
-
-    // Allocate a temporary host buffer for the original red channel
-    uint8_t* original_red_channel_for_device = (uint8_t*)malloc(M * N * sizeof(uint8_t));
-    for (int i = 0; i < M * N; ++i) {
-        original_red_channel_for_device[i] = image_array_host[i * C]; // Get original Red component
+    // 1. Create the planar (RRR...) host array for the coalesced test
+    uint8_t* image_array_host_planar_R = (uint8_t*)malloc(numPixels * sizeof(uint8_t));
+    for (int i = 0; i < numPixels; ++i) {
+        image_array_host_planar_R[i] = image_array_host_interleaved[i * C];
     }
 
-    // Copy the ORIGINAL red channel from this temporary host buffer to device
-    cudaMemcpy(red_channel_device, original_red_channel_for_device, M * N * sizeof(uint8_t), cudaMemcpyHostToDevice);
+    // part one - images
+    cudaEvent_t start, stop;
+    checkCudaErrors(cudaEventCreate(&start));
+    checkCudaErrors(cudaEventCreate(&stop));
+    float milliseconds = 0;
 
-    // Free the temporary host buffer
-    free(original_red_channel_for_device);
+    // --- Test 1: Coalesced Kernel (on RRR... data) ---
+    std::cout << "Running Coalesced Kernel..." << std::endl;
+    uint8_t* d_planar_R;
+    checkCudaErrors(cudaMalloc(&d_planar_R, numPixels * sizeof(uint8_t)));
+    checkCudaErrors(cudaMemcpy(d_planar_R, image_array_host_planar_R, numPixels * sizeof(uint8_t), cudaMemcpyHostToDevice));
 
-    // Now red_channel_device contains the original red channel, ready for uncoalesced inversion.
+    checkCudaErrors(cudaEventRecord(start, 0));
+    invertRedCoalesced<<<gridSize, blockSize>>>(d_planar_R, numPixels);
+    checkCudaErrors(cudaEventRecord(stop, 0));
+    checkCudaErrors(cudaEventSynchronize(stop));
+    checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));
+    
+    std::cout << "Time for invertRedCoalesced: " << milliseconds << " ms" << std::endl;
 
-    // --- Time invertRedUncoalesced kernel ---
-    cudaEvent_t startUncoalesced, stopUncoalesced;
-    cudaEventCreate(&startUncoalesced);
-    cudaEventCreate(&stopUncoalesced);
-
-    std::cout << "\nRunning invertRedUncoalesced kernel..." << std::endl;
-    cudaEventRecord(startUncoalesced, 0);
-    invertRedUncoalesced<<<gridSize, blockSize>>>(red_channel_device, M, N);
-    cudaEventRecord(stopUncoalesced, 0);
-    cudaEventSynchronize(stopUncoalesced);
-
-    float millisecondsUncoalesced = 0;
-    cudaEventElapsedTime(&millisecondsUncoalesced, startUncoalesced, stopUncoalesced);
-    std::cout << "Time for invertRedUncoalesced: " << millisecondsUncoalesced << " ms" << std::endl;
-
-    // Copy the inverted red channel (from uncoalesced) back to host
-    cudaMemcpy(red_channel_host, red_channel_device, M * N * sizeof(uint8_t), cudaMemcpyDeviceToHost);
-
-    // Reconstruct the image with the inverted red channel for uncoalesced version
-    uint8_t* output_image_uncoalesced = (uint8_t*)malloc(M * N * C * sizeof(uint8_t));
-    for (int i = 0; i < M * N; ++i) {
-        output_image_uncoalesced[i * C] = red_channel_host[i];       // Inverted Red
-        output_image_uncoalesced[i * C + 1] = image_array_host[i * C + 1]; // Original Green
-        output_image_uncoalesced[i * C + 2] = image_array_host[i * C + 2]; // Original Blue
+    // Get result back and save image
+    checkCudaErrors(cudaMemcpy(image_array_host_planar_R, d_planar_R, numPixels * sizeof(uint8_t), cudaMemcpyDeviceToHost));
+    uint8_t* output_image_coalesced = (uint8_t*)malloc(numPixels * C * sizeof(uint8_t));
+    for (int i = 0; i < numPixels; ++i) {
+        output_image_coalesced[i * C]     = image_array_host_planar_R[i];
+        output_image_coalesced[i * C + 1] = image_array_host_interleaved[i * C + 1];
+        output_image_coalesced[i * C + 2] = image_array_host_interleaved[i * C + 2];
     }
-    save_image_array(output_image_uncoalesced, 2);
-
-    // Clean up
-    cudaFree(red_channel_device);
-    free(red_channel_host);
-    free(image_array_host);
+    save_image_array(output_image_coalesced, 1);
     free(output_image_coalesced);
-    free(output_image_uncoalesced);
-    cudaEventDestroy(startCoalesced);
-    cudaEventDestroy(stopCoalesced);
-    cudaEventDestroy(startUncoalesced);
-    cudaEventDestroy(stopUncoalesced);
+    free(image_array_host_planar_R);
+    checkCudaErrors(cudaFree(d_planar_R));
 
- std::cout << "\n--- Vergelijking van coalesced vs. uncoalesced op een willekeurige array ---" << std::endl;
 
-    int randomArraySize = 1 << 10; // 2^10 = 1024
-    uint8_t* random_data_host = (uint8_t*)malloc(randomArraySize * sizeof(uint8_t));
+    // --- Test 2: Uncoalesced Kernel (on RGBRGB... data) ---
+    std::cout << "\nRunning Uncoalesced Kernel..." << std::endl;
+    uint8_t* d_interleaved_RGB;
+    checkCudaErrors(cudaMalloc(&d_interleaved_RGB, numPixels * C * sizeof(uint8_t)));
+    checkCudaErrors(cudaMemcpy(d_interleaved_RGB, image_array_host_interleaved, numPixels * C * sizeof(uint8_t), cudaMemcpyHostToDevice));
 
-    // Vul de array met willekeurige getallen
-    srand(time(NULL)); // Initialiseer de random number generator
-    for (int i = 0; i < randomArraySize; ++i) {
-        random_data_host[i] = rand() % 256; // Willekeurig getal tussen 0 en 255
+    checkCudaErrors(cudaEventRecord(start, 0));
+    invertRedUncoalesced<<<gridSize, blockSize>>>(d_interleaved_RGB, numPixels);
+    checkCudaErrors(cudaEventRecord(stop, 0));
+    checkCudaErrors(cudaEventSynchronize(stop));
+    checkCudaErrors(cudaEventElapsedTime(&milliseconds, start, stop));
+
+    std::cout << "Time for invertRedUncoalesced: " << milliseconds << " ms" << std::endl;
+
+    // Get result back and save image
+    checkCudaErrors(cudaMemcpy(image_array_host_interleaved, d_interleaved_RGB, numPixels * C * sizeof(uint8_t), cudaMemcpyDeviceToHost));
+    save_image_array(image_array_host_interleaved, 2);
+    checkCudaErrors(cudaFree(d_interleaved_RGB));
+
+
+    // === Part 2: Benchmark with different array sizes ===
+    
+    std::cout << "\n\n--- Benchmarking Coalesced vs. Uncoalesced ---" << std::endl;
+    std::cout << std::setw(12) << "Num Pixels"
+              << std::setw(12) << "Coalesced (ms)"
+              << std::setw(14) << "Uncoalesced (ms)"
+              << std::setw(10) << "Slowdown" << std::endl;
+    std::cout << "---------------------------------------------------------" << std::endl;
+
+    srand(time(NULL));
+
+    for (int p = 20; p <= 26; ++p) {
+        int N_pixels = 1 << p;
+        int N_bytes_planar = N_pixels * sizeof(uint8_t);
+        int N_bytes_interleaved = N_pixels * C * sizeof(uint8_t);
+
+        uint8_t* h_planar_R = (uint8_t*)malloc(N_bytes_planar);
+        uint8_t* h_interleaved_RGB = (uint8_t*)malloc(N_bytes_interleaved);
+        if (!h_planar_R || !h_interleaved_RGB) {
+            std::cerr << "Failed to allocate host memory for benchmark!" << std::endl;
+            break;
+        }
+
+        for (int i = 0; i < N_pixels; ++i) {
+            uint8_t r = rand() % 256;
+            h_planar_R[i] = r;
+            h_interleaved_RGB[i * C] = r;
+            h_interleaved_RGB[i * C + 1] = rand() % 256;
+            h_interleaved_RGB[i * C + 2] = rand() % 256;
+        }
+
+        uint8_t* d_planar, *d_interleaved;
+        checkCudaErrors(cudaMalloc(&d_planar, N_bytes_planar));
+        checkCudaErrors(cudaMalloc(&d_interleaved, N_bytes_interleaved));
+
+        int benchGridSize = (N_pixels + blockSize - 1) / blockSize;
+        float msCoalesced = 0, msUncoalesced = 0;
+
+        // Time Coalesced
+        checkCudaErrors(cudaMemcpy(d_planar, h_planar_R, N_bytes_planar, cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaEventRecord(start, 0));
+        invertRedCoalesced<<<benchGridSize, blockSize>>>(d_planar, N_pixels);
+        checkCudaErrors(cudaEventRecord(stop, 0));
+        checkCudaErrors(cudaEventSynchronize(stop));
+        checkCudaErrors(cudaEventElapsedTime(&msCoalesced, start, stop));
+
+        // Time Uncoalesced
+        checkCudaErrors(cudaMemcpy(d_interleaved, h_interleaved_RGB, N_bytes_interleaved, cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaEventRecord(start, 0));
+        invertRedUncoalesced<<<benchGridSize, blockSize>>>(d_interleaved, N_pixels);
+        checkCudaErrors(cudaEventRecord(stop, 0));
+        checkCudaErrors(cudaEventSynchronize(stop));
+        checkCudaErrors(cudaEventElapsedTime(&msUncoalesced, start, stop));
+
+        std::cout << std::setw(12) << N_pixels
+                  << std::setw(12) << std::fixed << std::setprecision(4) << msCoalesced
+                  << std::setw(14) << std::fixed << std::setprecision(4) << msUncoalesced
+                  << std::setw(9) << std::fixed << std::setprecision(2) << (msUncoalesced / msCoalesced) << "x"
+                  << std::endl;
+
+        free(h_planar_R);
+        free(h_interleaved_RGB);
+        checkCudaErrors(cudaFree(d_planar));
+        checkCudaErrors(cudaFree(d_interleaved));
     }
 
-    uint8_t* random_data_device;
-    cudaMalloc(&random_data_device, randomArraySize * sizeof(uint8_t));
 
-    // Kopieer de willekeurige data van host naar device
-    cudaMemcpy(random_data_device, random_data_host, randomArraySize * sizeof(uint8_t), cudaMemcpyHostToDevice);
+    free(full_image_buffer_host);
 
-    // Definieer grid en block dimensies voor de willekeurige array
-    int blockSizeRandom = 256;
-    int gridSizeRandom = (randomArraySize + blockSizeRandom - 1) / blockSizeRandom;
-
-    // --- Time invertRedCoalesced kernel op willekeurige array ---
-    cudaEvent_t startCoalescedRandom, stopCoalescedRandom;
-    cudaEventCreate(&startCoalescedRandom);
-    cudaEventCreate(&stopCoalescedRandom);
-
-    std::cout << "Running invertRedCoalesced kernel on random array..." << std::endl;
-    cudaEventRecord(startCoalescedRandom, 0);
-    invertRedCoalesced<<<gridSizeRandom, blockSizeRandom>>>(random_data_device, randomArraySize, 1); // Hoogte is 1 voor 1D array
-    cudaEventRecord(stopCoalescedRandom, 0);
-    cudaEventSynchronize(stopCoalescedRandom);
-
-    float millisecondsCoalescedRandom = 0;
-    cudaEventElapsedTime(&millisecondsCoalescedRandom, startCoalescedRandom, stopCoalescedRandom);
-    std::cout << "Time for invertRedCoalesced on random array: " << millisecondsCoalescedRandom << " ms" << std::endl;
-
-    // (Optioneel: kopieer terug naar host om te controleren, maar niet nodig voor tijdmeting)
-    // cudaMemcpy(random_data_host, random_data_device, randomArraySize * sizeof(uint8_t), cudaMemcpyDeviceToHost);
-
-    // Reset device geheugen met de originele willekeurige data voor de uncoalesced test
-    cudaMemcpy(random_data_device, random_data_host, randomArraySize * sizeof(uint8_t), cudaMemcpyHostToDevice);
-
-    // --- Time invertRedUncoalesced kernel op willekeurige array ---
-    cudaEvent_t startUncoalescedRandom, stopUncoalescedRandom;
-    cudaEventCreate(&startUncoalescedRandom);
-    cudaEventCreate(&stopUncoalescedRandom);
-
-    std::cout << "\nRunning invertRedUncoalesced kernel on random array..." << std::endl;
-    cudaEventRecord(startUncoalescedRandom, 0);
-    invertRedUncoalesced<<<gridSizeRandom, blockSizeRandom>>>(random_data_device, randomArraySize, 1); // Hoogte is 1 voor 1D array
-    cudaEventRecord(stopUncoalescedRandom, 0);
-    cudaEventSynchronize(stopUncoalescedRandom);
-
-    float millisecondsUncoalescedRandom = 0;
-    cudaEventElapsedTime(&millisecondsUncoalescedRandom, startUncoalescedRandom, stopUncoalescedRandom);
-    std::cout << "Time for invertRedUncoalesced on random array: " << millisecondsUncoalescedRandom << " ms" << std::endl;
-
-    // Clean up voor de willekeurige array
-    cudaFree(random_data_device);
-    free(random_data_host);
-    cudaEventDestroy(startCoalescedRandom);
-    cudaEventDestroy(stopCoalescedRandom);
-    cudaEventDestroy(startUncoalescedRandom);
-    cudaEventDestroy(stopUncoalescedRandom);
-
+    checkCudaErrors(cudaEventDestroy(start));
+    checkCudaErrors(cudaEventDestroy(stop));
 
     return 0;
 }
+
+
+/** TEXTUAL OUTPUT
+
+--- Processing Image File (anna.ppm) ---
+Running Coalesced Kernel...
+Time for invertRedCoalesced: 1.50403 ms
+
+Running Uncoalesced Kernel...
+Time for invertRedUncoalesced: 0.060384 ms
+
+
+--- Benchmarking Coalesced vs. Uncoalesced ---
+  Num PixelsCoalesced (ms)Uncoalesced (ms)  Slowdown
+---------------------------------------------------------
+     1048576      0.0472        0.0458     0.97x
+     2097152      0.0567        0.0754     1.33x
+     4194304      0.1514        0.1087     0.72x
+     8388608      0.1308        0.1864     1.43x
+    16777216      0.2332        0.3509     1.50x
+    33554432      0.5128        0.6697     1.31x
+    67108864      0.9152        1.3090     1.43x
+
+
+*/
