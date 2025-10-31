@@ -26,13 +26,6 @@ void check_cuda(cudaError_t result, char const *const func, const char *const fi
 
 
 // --- Image Loading/Saving ---
-
-/**
- * @brief Gets the data of an (RGB) image, *including the header*.
- *
- * @return The pointer to the very start of the allocated buffer.
- * This is the pointer you must 'free()' later.
- */
 uint8_t* get_full_image_buffer(void){
     FILE *imageFile;
     imageFile=fopen("./anna.ppm","rb");
@@ -74,6 +67,7 @@ void save_image_array(uint8_t* image_array ,int a){
     fclose(imageFile);
 }
 
+
 // --- KERNEL 1: COALESCED ---
 // Operates on a PLANAR array (RRR...GGG...BBB...)
 __global__ void invertRedCoalesced(unsigned char* redChannel, int numPixels) {
@@ -85,7 +79,7 @@ __global__ void invertRedCoalesced(unsigned char* redChannel, int numPixels) {
 }
 
 // --- KERNEL 2: UNCOALESCED ---
-// Operates on an INTERLEAVED array (RGBRGBRGB...)
+// Operates on an INTERLEAVED array (RGBGBRGB...)R
 __global__ void invertRedUncoalesced(unsigned char* interleavedImage, int numPixels) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -104,21 +98,15 @@ int main (void) {
     int blockSize = 256;
     int gridSize = (numPixels + blockSize - 1) / blockSize;
 
-    // --- KEY FIX FOR CRASH ---
-    // 1. Get the full buffer (starts with header)
     uint8_t* full_image_buffer_host = get_full_image_buffer();
-    
-    // 2. Get the pointer to the actual pixel data by adding the offset
     uint8_t* image_array_host_interleaved = full_image_buffer_host + OFFSET;
-    // --- END KEY FIX ---
 
     // 1. Create the planar (RRR...) host array for the coalesced test
     uint8_t* image_array_host_planar_R = (uint8_t*)malloc(numPixels * sizeof(uint8_t));
     for (int i = 0; i < numPixels; ++i) {
         image_array_host_planar_R[i] = image_array_host_interleaved[i * C];
     }
-
-    // part one - images
+    
     cudaEvent_t start, stop;
     checkCudaErrors(cudaEventCreate(&start));
     checkCudaErrors(cudaEventCreate(&stop));
