@@ -185,6 +185,7 @@ int main (void) {
 
         for (int i = 0; i < N_pixels; ++i) {
             uint8_t r = rand() % 256;
+            // dit is op de cpu , en d plannar is op gpu
             h_planar_R[i] = r;
             h_interleaved_RGB[i * C] = r;
             h_interleaved_RGB[i * C + 1] = rand() % 256;
