@@ -85,7 +85,6 @@ int main() {
 
             reduction_max<<<numBlocks, blocksPerThread>>>(p_arr, p_maxNum, N);
 
-            cudaDeviceSynchronize () ;
             cudaMemcpyAsync(&maxNum, p_maxNum, sizeof(int), cudaMemcpyDeviceToHost);
             
             cudaFree(p_arr);
@@ -149,7 +148,7 @@ int main() {
 
 
         }
-
+	// waiting here until everything is syncronized
         cudaDeviceSynchronize();
 
         end = clock();     
