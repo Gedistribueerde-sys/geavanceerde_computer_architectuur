@@ -64,93 +64,38 @@ __global__ void reduction_Sub(int *list, int* maxNum, int N){
 int main() {
     clock_t start,end;
     srand(time(NULL));  // seed the random number generator
-  
-   
-    
-   
-    
     for (int N= 32;N < 300000; N*=2){
         int arr[N];
         int numBlocks = 4;
         int blocksPerThread = N / (numBlocks*2);
         start = clock();
         for(int i = 0; i< 1000; i++){
-            /*----------max---------- */
-            // generate random numbers between 0 and 999
-            for (int i = 0; i < N; i++) {
-                arr[i] = rand() % 1000;
-            }
-            int maxNum = 0;
-            int *p_arr, *p_maxNum;
-            cudaMalloc((void**)&p_arr, sizeof(int)*N);
-            cudaMalloc((void**)&p_maxNum, sizeof(int));
-            cudaMemcpy(p_arr, arr, sizeof(int)*N, cudaMemcpyHostToDevice);
-            cudaMemcpy(p_maxNum, &maxNum, sizeof(int), cudaMemcpyHostToDevice);
 
-            reduction_max<<<numBlocks, blocksPerThread>>>(p_arr, p_maxNum, N);
-cudaDeviceSynchronize () ;
-            cudaMemcpy(&maxNum, p_maxNum, sizeof(int), cudaMemcpyDeviceToHost);
+             for (int j = 0; j<4 ; j++){
+
+           
+            for (int d = 0; d < N; d++) {
+                arr[d] = rand() % 1000;
+            }
+            int Num = 0;
+            int *p_arr, *p_Num;
+            cudaMalloc((void**)&p_arr, sizeof(int)*N);
+            cudaMalloc((void**)&p_Num, sizeof(int));
+            cudaMemcpy(p_arr, arr, sizeof(int)*N, cudaMemcpyHostToDevice);
+            cudaMemcpy(p_Num, &Num, sizeof(int), cudaMemcpyHostToDevice);
+            if (j ==0) reduction_max<<<numBlocks, blocksPerThread>>>(p_arr, p_Num, N);
+            else if (j ==1) reduction_min<<<numBlocks, blocksPerThread>>>(p_arr, p_Num, N);
+            else if (j ==2) reduction_sum<<<numBlocks, blocksPerThread>>>(p_arr, p_Num, N);
+            else if (j ==3) reduction_Sub<<<numBlocks, blocksPerThread>>>(p_arr, p_Num, N);
+
+            
+            cudaDeviceSynchronize () ;
+            cudaMemcpy(&Num, p_Num, sizeof(int), cudaMemcpyDeviceToHost);
             
             cudaFree(p_arr);
-            cudaFree(p_maxNum);
-            /*----------min---------- */
-            // generate random numbers between 0 and 999
-            for (int i = 0; i < N; i++) {
-                arr[i] = rand() % 1000;
-            }
-            int minNum = 0;
-            int *p_minNum;
-            cudaMalloc((void**)&p_arr, sizeof(int)*N);
-            cudaMalloc((void**)&p_minNum, sizeof(int));
-            cudaMemcpy(p_arr, arr, sizeof(int)*N, cudaMemcpyHostToDevice);
-            cudaMemcpy(p_minNum, &minNum, sizeof(int), cudaMemcpyHostToDevice);
+            cudaFree(p_Num);
 
-            reduction_min<<<numBlocks, blocksPerThread>>>(p_arr, p_minNum, N);
-cudaDeviceSynchronize () ;
-            cudaMemcpy(&minNum, p_minNum, sizeof(int), cudaMemcpyDeviceToHost);
-            
-            cudaFree(p_arr);
-            cudaFree(p_minNum);
-
-            /*---------sum----------*/
-            // generate random numbers between 0 and 999
-            for (int i = 0; i < N; i++) {
-                arr[i] = rand() % 1000;
-            }
-            int sum = 0;
-            int *p_sum;
-            cudaMalloc((void**)&p_arr, sizeof(int)*N);
-            cudaMalloc((void**)&p_sum, sizeof(int));
-            cudaMemcpy(p_arr, arr, sizeof(int)*N, cudaMemcpyHostToDevice);
-            cudaMemcpy(p_sum, &sum, sizeof(int), cudaMemcpyHostToDevice);
-
-            reduction_sum<<<numBlocks, blocksPerThread>>>(p_arr, p_sum, N);
-cudaDeviceSynchronize () ;
-            cudaMemcpy(&sum, p_sum, sizeof(int), cudaMemcpyDeviceToHost);
-            
-            cudaFree(p_arr);
-            cudaFree(p_sum);
-                /*---------Sub----------*/
-
-            // generate random numbers between 0 and 999
-            for (int i = 0; i < N; i++) {
-                arr[i] = rand() % 1000;
-            }
-            int sub = 0;
-            int *p_sub;
-            cudaMalloc((void**)&p_arr, sizeof(int)*N);
-            cudaMalloc((void**)&p_sub, sizeof(int));
-            cudaMemcpy(p_arr, arr, sizeof(int)*N, cudaMemcpyHostToDevice);
-            cudaMemcpy(p_sub, &sub, sizeof(int), cudaMemcpyHostToDevice);
-
-            reduction_Sub<<<numBlocks, blocksPerThread>>>(p_arr, p_sub, N);
-cudaDeviceSynchronize () ;
-            cudaMemcpy(&sub, p_sub, sizeof(int), cudaMemcpyDeviceToHost);
-            
-            cudaFree(p_arr);
-            cudaFree(p_sub);
-
-
+        }
         }
 
         cudaDeviceSynchronize();
@@ -164,14 +109,3 @@ cudaDeviceSynchronize () ;
     return 0;
 }
 
-/*
-output
-Totale programmatijd: 926.072 ms N: 1024
-Totale programmatijd: 862.901 ms N: 2048
-Totale programmatijd: 1008.52 ms N: 4096
-Totale programmatijd: 1495.55 ms N: 8192
-Totale programmatijd: 2288.3 ms N: 16384
-Totale programmatijd: 3461.04 ms N: 32768
-Totale programmatijd: 5301.68 ms N: 65536
-
-*/
