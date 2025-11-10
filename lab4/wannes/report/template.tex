@@ -1,0 +1,379 @@
+% LTeX: enabled=false
+\documentclass[a4paper,10pt]{article}
+
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage[colorlinks, linkcolor=black, citecolor=black, urlcolor=black]{hyperref}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{caption}
+\geometry{tmargin=3cm, bmargin=2.2cm, lmargin=2.2cm, rmargin=2cm}
+\usepackage{todonotes} %Used for the figure placeholders
+\usepackage{ifthen}
+\usepackage{parskip}
+\definecolor{codebg}{RGB}{30,30,30}
+\definecolor{codecomment}{RGB}{106,153,85}
+\definecolor{codekeyword}{RGB}{86,156,214}
+\definecolor{codestring}{RGB}{214,157,133}
+\definecolor{codenumber}{RGB}{181,206,168}
+% Your name and student number must be filled in on the title page found in
+% titlepage.tex.
+\lstdefinelanguage{CUDA}{
+  language=C++,
+  morekeywords={
+    __global__, __device__, __host__, __shared__, __constant__,
+    __syncthreads, __threadfence_block, __threadfence, __threadfence_system,
+    threadIdx, blockIdx, blockDim, gridDim
+  },
+  sensitive=true
+}
+
+% Algemene stijl
+\lstset{
+  language=CUDA,            % Use custom defined language
+    basicstyle=\ttfamily\footnotesize,      % Monospaced font, small
+    keywordstyle=[1]\color{blue}\bfseries,  % Mnemonics in blue and bold
+    keywordstyle=[2]\color{purple},         % Registers in purple
+    keywordstyle=[3]\color{brown}\bfseries, % Labels in brown and bold
+    keywordstyle=[4]\color{teal}\bfseries,  % Constants and preprocessor in teal
+    commentstyle=\color{gray},              % Comments in gray
+    stringstyle=\color{red},                % Strings in red
+    numbers=left,                           % Line numbers on the left
+    numberstyle=\tiny\color{gray},          % Line number style
+    stepnumber=1,                           % Line numbering step
+    numbersep=5pt,                          % Space between line numbers and code
+    breaklines=true,                        % Line breaking
+    backgroundcolor=\color{gray!20},        % Light gray background
+    frame=single,                           % Single frame around the code block
+    captionpos=b,                           % Caption position at the bottom
+    escapeinside={\%*}{*)},                 % Escape to LaTeX with %*...*)
+}
+
+
+\begin{document}
+\newboolean{anonymize}
+% Uncomment to create an anonymized version of your report
+%\setboolean{anonymize}{true}
+
+\input{titlepage}
+
+\tableofcontents
+\newpage
+\section{Part 1: Coalesced vs. Uncoalesced Memory Access}
+In the CUDA execution model, threads are organized into \textbf{warps} of 32. The GPU executes instructions for each warp in a SIMT (Single Instruction, Multiple Threads) fashion. When accessing global memory, the GPU attempts to \textit{coalesce} the memory requests from all threads in a warp into the minimum number of 32-byte transactions.
+
+This process is most efficient when consecutive threads access consecutive memory locations. For example, if every thread in a warp requests a 4-byte value, and these values are all next to each other in memory, the GPU can satisfy all 32 requests with just four 32-byte transactions (a total of 128 bytes). This is a coalesced memory access pattern and it makes optimal use of memory bandwidth.
+
+Conversely, if threads access memory locations that are far apart (for example \textit{striding}), the hardware may be forced to issue a separate 32-byte transaction for each thread's request, even if each thread only needs a small part of that 32-byte segment. This leads to a significant waste of bandwidth and slower performance. In this part of the lab, we will investigate the performance impact of these two access patterns.
+
+\subsection{Overview}
+We implemented two CUDA kernels that invert the red channel of an image, one using coalesced memory access and the other using uncoalesced access. The coalesced kernel operates on a planar image format where all red pixels are stored consecutively, while the uncoalesced kernel works on an interleaved format (RGBRGB...).
+
+\subsection{Results}
+To measure the performance difference, we benchmarked the two kernels across 100 runs for various input sizes and thread block configurations. The input image is 960x1280 pixels, and we tested it at its original size (1x), as well as scaled up by 2x and 4x. The tables below show the average execution time in milliseconds. Figure \ref{fig:part_1} summarizes the results graphically.
+
+From the results, we can observe a few key points:
+\begin{itemize}
+    \item The coalesced memory access pattern is consistently faster than the uncoalesced one, with a speedup factor typically around 1.5x to 1.7x for threads per block between 128 and 512.
+    \item For each input size, there appears to be an optimal number of threads per block. For our tests, using 128, 256 or 512 threads per block gives the best performance for the coalesced kernel.
+    \item As the input size increases, the absolute time saved by using coalesced access becomes more significant.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Benchmark Results for 1x Image Size (1,228,800 pixels)}
+\begin{tabular}{|r|r|r|r|}
+\hline
+\textbf{Threads/Block} & \textbf{Uncoalesced (ms)} & \textbf{Coalesced (ms)} & \textbf{Speedup} \\
+\hline
+64   & 0.0428 & 0.0356 & 1.20x \\
+128  & 0.0353 & 0.0227 & 1.55x \\
+256  & 0.0338 & 0.0199 & 1.70x \\
+512  & 0.0371 & 0.0211 & 1.76x \\
+1024 & 0.0417 & 0.0265 & 1.57x \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Benchmark Results for 2x Image Size (2,457,600 pixels)}
+\begin{tabular}{|r|r|r|r|}
+\hline
+\textbf{Threads/Block} & \textbf{Uncoalesced (ms)} & \textbf{Coalesced (ms)} & \textbf{Speedup} \\
+\hline
+64   & 0.0644 & 0.0564 & 1.14x \\
+128  & 0.0590 & 0.0367 & 1.61x \\
+256  & 0.0568 & 0.0372 & 1.53x \\
+512  & 0.0554 & 0.0385 & 1.44x \\
+1024 & 0.0670 & 0.0542 & 1.24x \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Benchmark Results for 4x Image Size (4,915,200 pixels)}
+\begin{tabular}{|r|r|r|r|}
+\hline
+\textbf{Threads/Block} & \textbf{Uncoalesced (ms)} & \textbf{Coalesced (ms)} & \textbf{Speedup} \\
+\hline
+64   & 0.1153 & 0.0965 & 1.19x \\
+128  & 0.1062 & 0.0627 & 1.69x \\
+256  & 0.1048 & 0.0639 & 1.64x \\
+512  & 0.1072 & 0.0649 & 1.65x \\
+1024 & 0.1169 & 0.0919 & 1.27x \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/memory_coalescing_report.png}
+    \caption{Results Summary}
+    \label{fig:part_1}
+\end{figure}
+
+\subsection{Effect of Input, Block, and Grid Size}
+The number of threads per block affects the GPU's ability to schedule and overlap warps to hide memory latency. The total number of blocks, known as the grid size, is determined by the input size and the number of threads we choose for each block.
+
+Our benchmark results show a clear pattern related to the block size:
+\begin{itemize}
+    \item \textbf{Small Blocks (64 threads):} Using only 64 threads per block gives the GPU too little work to do at once. If these threads have to wait for data, the GPU doesn't have enough other tasks to switch to, leading to wasted time and lower performance.
+    
+    \item \textbf{Optimal Blocks (128-512 threads):} Block sizes in this range provide a good balance. There are enough threads for the GPU to effectively switch between tasks, hiding the time spent waiting for memory. This keeps the hardware busy and leads to the best performance, as seen in our results.
+    
+    \item \textbf{Large Blocks (1024 threads):} While it might seem like more threads are always better, performance drops with 1024 threads. This is because a very large block uses up too many of the GPU's limited resources (like registers). This can prevent the GPU from running as many blocks in parallel, which hurts overall performance.
+\end{itemize}
+
+\newpage
+\subsection{Code}
+The following kernels invert the red channel of an image:
+\begin{lstlisting}[language=C, caption={Coalesced Memory Access}]
+ // Operates on a PLANAR array (RRR...GGG...BBB...)
+__global__ void invert_red_coalesced(uint8_t* planar_input, int num_pixels) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_pixels) {
+        planar_input[idx] = 255 - planar_input[idx];
+    }
+}
+ \end{lstlisting}
+\begin{lstlisting}[language=C, caption={UnCoalesced Memory Access}]
+ // Operates on an INTERLEAVED array (RGBRGBRGB...)
+__global__ void invert_red_uncoalesced(uint8_t* interleaved_input, int num_pixels) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < num_pixels) {
+        int pixel_index = idx * 3;
+        interleaved_input[pixel_index] = 255 - interleaved_input[pixel_index];
+    }
+}
+\end{lstlisting}
+
+\subsection{Conclusion}
+This analysis shows that coalesced memory access patterns significantly improve performance in CUDA applications. By ensuring that threads within a warp access consecutive memory locations, we can reduce the number of memory transactions and make better use of the available bandwidth. Additionally, choosing an appropriate block size is crucial for maximizing GPU utilization. Blocks that are too small fail to hide memory latency effectively, while excessively large blocks can exhaust hardware resources and limit parallelism. For our tests, a block size between 128 and 512 threads was the sweet spot.
+
+\newpage
+\section{Part 2: Global, Shared, and Constant Memory for Matrix Multiplication}
+
+\subsection{Overview}
+In this part of the lab, we explore different memory optimization techniques for matrix multiplication ($C = AB$) on the GPU. We implemented and benchmarked three distinct CUDA kernels:
+\begin{itemize}
+    \item A baseline kernel that relies exclusively on \textbf{global memory} for all matrix data (A, B, and C).
+    \item An optimized kernel that uses \textbf{shared memory} to implement a tiled matrix multiplication algorithm. This approach aims to reduce the high latency of global memory access by caching sub-matrices (tiles) in the fast, on-chip shared memory, thereby improving data reuse.
+    \item A third kernel that leverages \textbf{constant memory} to store one of the input matrices (B). Constant memory is cached and provides efficient broadcast capabilities, which can be beneficial when all threads in a warp access the same memory location.
+\end{itemize}
+To evaluate their performance, we timed each kernel's execution, as well as the required memory transfers between the host (CPU) and device (GPU), for a range of square matrix sizes. The results were verified for correctness against a standard CPU-based calculation.
+
+\subsection{Results}
+The tables below summarize the average execution times (in milliseconds) for memory transfers and kernel executions across different matrix sizes (N x N) and block sizes (BLOCK\_SIZE = 4 and 16). The grid dimensions used for each configuration are also provided. Next to the tables, several figures visualize the performance differences from the results in the table.
+\begin{table}[h]
+\caption{Average Times for BLOCK\_SIZE = 16 (in ms)}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l c c c c c c c c}
+\hline
+N & 8 & 16 & 32 & 64 & 96 & 192 & 384 & 768 \\ \hline
+\multicolumn{9}{c}{\textbf{Memory Transfers/Copies}} \\ \hline
+Host to Device (A) & 0.0066 & 0.0057 & 0.0069 & 0.0107 & 0.0173 & 0.0930 & 0.2370 & 0.6899 \\
+Host to Device (B) & 0.0053 & 0.0057 & 0.0063 & 0.0090 & 0.0147 & 0.0284 & 0.1359 & 0.6680 \\
+Host to Constant (B) & 0.0029 & 0.0019 & 0.0017 & 0.0016 & 0.0021 & (too large) & (too large) & (too large) \\
+Load to Shared (Global to Shared) & - & 0.0060 & 0.0037 & 0.0040 & 0.0042 & 0.0060 & 0.0105 & 0.0461 \\ \hline
+\multicolumn{9}{c}{\textbf{Kernel Execution Times}} \\ \hline
+Grid & 1x1 & 1x1 & 2x2 & 4x4 & 6x6 & 12x12 & 24x24 & 48x48 \\
+\hline
+Global Kernel & 0.0044 & 0.0046 & 0.0052 & 0.0065 & 0.0094 & 0.0296 & 0.1904 & 1.3779 \\
+Shared Kernel & - & 0.0046 & 0.0049 & 0.0060 & 0.0086 & 0.0279 & 0.1439 & 0.8480 \\
+Constant Kernel & 0.0046 & 0.0074 & 0.0120 & 0.0243 & 0.0401 & - & - & - \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[h]
+\caption{Average Times for BLOCK\_SIZE = 4 (in ms)}
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l c c c c c c c c}
+\hline
+N & 8 & 16 & 32 & 64 & 96 & 192 & 384 & 768 \\ \hline
+\multicolumn{9}{c}{\textbf{Memory Transfers/Copies}} \\ \hline
+Host to Device (A) & 0.0055 & 0.0055 & 0.0060 & 0.0095 & 0.0134 & 0.0261 & 0.1449 & 0.4733 \\
+Host to Device (B) & 0.0054 & 0.0054 & 0.0060 & 0.0095 & 0.0142 & 0.0234 & 0.1302 & 0.6503 \\
+Host to Constant (B) & 0.0026 & 0.0017 & 0.0017 & 0.0017 & 0.0020 & (too large) & (too large) & (too large) \\
+Load to Shared (Global to Shared) & 0.0034 & 0.0037 & 0.0037 & 0.0039 & 0.0054 & 0.0220 & 0.1263 & 0.8405 \\ \hline
+\multicolumn{9}{c}{\textbf{Kernel Execution Times}} \\ \hline
+Grid & 2x2 & 4x4 & 8x8 & 16x16 & 24x24 & 48x48 & 96x96 & 192x192 \\
+\hline
+Global Kernel & 0.0039 & 0.0038 & 0.0046 & 0.0064 & 0.0122 & 0.0534 & 0.3762 & 2.8381 \\
+Shared Kernel & 0.0040 & 0.0043 & 0.0051 & 0.0075 & 0.0152 & 0.0694 & 0.4715 & 3.4653 \\
+Constant Kernel & 0.0040 & 0.0043 & 0.0053 & 0.0092 & 0.0244 & - & - & - \\ \hline
+\end{tabular}%
+}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/kernel_times_block4.png}
+    \caption{Kernel Execution Times block size 4}
+    \label{fig:kernel_times_block_size_4}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/kernel_times_block16.png}
+    \caption{Kernel Execution Times block size 16}
+    \label{fig:kernel_times_block_size_16}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/memory_transfer_times.png}
+    \caption{Memory Transfer Times}
+    \label{fig:memory_transfer_times}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/memory_operations_comparison.png}
+    \caption{Memory Operations Comparison}
+    \label{fig:memory_operations_comparison}
+\end{figure}
+
+\newpage
+
+\subsection{Analysis}
+The performance of the three different matrix multiplication kernels (Global, Shared, and Constant) was evaluated for block sizes of 4 and 16. The analysis focuses on memory transfer times, kernel execution speeds, and the impact of block and matrix size on overall performance.
+
+\paragraph{1. Memory Transfer Times}
+As shown in the tables and visualized in Figure \ref{fig:memory_transfer_times}, the time required for Host-to-Device (HtoD) memory transfers increases with the matrix size (N), which is expected as more data needs to be moved. The `Host to Constant (B)` transfer is notably faster for small matrices but is constrained by the 64 KB limit of constant memory, becoming unavailable for N=192 and larger. The `Load to Shared` time, which measures the cost of moving data from global to shared memory, also scales with matrix size. This is an overhead inherent to the tiled algorithm but is compensated by the faster access to shared memory during computation.
+
+\paragraph{2. Kernel Execution Time Comparison}
+The kernel execution times, plotted in Figures \ref{fig:kernel_times_block_size_4} and \ref{fig:kernel_times_block_size_16}, reveal the strengths and weaknesses of each memory type.
+\begin{itemize}
+    \item For \texttt{BLOCK\_SIZE=16} the \textbf{Shared Kernel} consistently outperforms the \textbf{Global Kernel}, especially as the matrix size $N$ increases. For \texttt{BLOCK\_SIZE=16} and $N=768$, the shared kernel is approximately 1.6× faster than the global kernel (0.8480 ms vs. 1.3779 ms). This speedup is due to the tiled approach, which significantly reduces redundant global memory accesses by reusing data from the much faster shared memory.
+    \item The \textbf{Constant Kernel} is effective for small matrices where the data fits into the constant memory cache. However, its performance degrades relative to the other kernels as $N$ increases, and it becomes unusable for $N \geq 192$. The broadcast mechanism of constant memory is beneficial, but its small size is a major limitation.
+    \item With \texttt{BLOCK\_SIZE=4}, the shared memory kernel is surprisingly slower than the global kernel for larger matrices. This suggests that the overhead of tiling and the smaller tile size do not provide enough data reuse to overcome the cost of loading data into shared memory, making the simpler global memory approach more efficient in this specific configuration.
+\end{itemize}
+
+
+
+\paragraph{3. Impact of Block Size}
+Comparing the results for \texttt{BLOCK\_SIZE=16} and \texttt{BLOCK\_SIZE=4} highlights the importance of block size in performance tuning.
+\begin{itemize}
+    \item For the shared memory kernel, a larger block size (\texttt{BLOCK\_SIZE=16}) is clearly superior. It allows for more data reuse within each tile, which better amortizes the cost of loading data from global memory. The smaller tiles of \texttt{BLOCK\_SIZE=4} do not seem to hold enough data to be effective.
+    \item For the global memory kernel, a smaller block size (\texttt{BLOCK\_SIZE=4}) appears to yield better performance for larger matrices. This might be related to how the GPU schedules the larger number of smaller blocks, potentially leading to better occupancy and latency hiding.
+\end{itemize}
+
+\paragraph{4. Scaling with Matrix and Grid Size}
+All kernel execution times increase with matrix size, which is consistent with the $\mathcal{O}(N^3)$ complexity of matrix multiplication. However, the rate of increase differs. The shared memory kernel (with \texttt{BLOCK\_SIZE=16}) scales more gracefully than the global kernel, as its effective use of shared memory mitigates the memory bandwidth bottleneck that becomes more pronounced at larger scales. The grid size, which is determined by $N$ and \texttt{BLOCK\_SIZE}, grows accordingly, providing more parallelism for the GPU to exploit.
+
+\newpage
+\subsection{Code}
+The code snippets below illustrate the key components of each kernel implementation.
+\subsubsection{Helper Functions}
+\begin{lstlisting}[language=C, caption={Helper Functions for Matrix Access}]
+struct Matrix {
+    int width, height, stride;
+    int* elements;
+};
+
+__device__ int  GetElement(const Matrix A, int row, int col) {
+    return A.elements[row * A.stride + col];
+}
+__device__ void SetElement(Matrix A, int row, int col, int value) {
+    A.elements[row * A.stride + col] = value;
+}
+__device__ Matrix GetSubMatrix(Matrix A, int row, int col) {
+    Matrix sub;
+    sub.width = sub.height = BLOCK_SIZE;
+    sub.stride = A.stride;
+    sub.elements = &A.elements[A.stride * BLOCK_SIZE * row + BLOCK_SIZE * col];
+    return sub;
+}
+\end{lstlisting}
+\subsubsection{Kernels}
+\begin{lstlisting}[language=C, caption={CUDA Kernel: Matrix multiplication using only Global Memory}]
+__global__ void MatMulGlobal(Matrix A, Matrix B, Matrix C) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= C.height || col >= C.width) return;
+
+    int sum = 0;
+    for (int k = 0; k < A.width; ++k)
+        sum += GetElement(A, row, k) * GetElement(B, k, col);
+    SetElement(C, row, col, sum);
+}
+\end{lstlisting}
+\begin{lstlisting}[language=C, caption={Matrix multiplication using Shared Memory (tiling)}]
+__global__ void MatMulShared(Matrix A, Matrix B, Matrix C) {
+    int bx = blockIdx.x, by = blockIdx.y;
+    int tx = threadIdx.x, ty = threadIdx.y;
+    Matrix Csub = GetSubMatrix(C, by, bx);
+
+    int sum = 0;
+    for (int m = 0; m < (A.width / BLOCK_SIZE); ++m) {
+        Matrix Asub = GetSubMatrix(A, by, m);
+        Matrix Bsub = GetSubMatrix(B, m, bx);
+
+        __shared__ int As[BLOCK_SIZE][BLOCK_SIZE];
+        __shared__ int Bs[BLOCK_SIZE][BLOCK_SIZE];
+
+        As[ty][tx] = GetElement(Asub, ty, tx);
+        Bs[ty][tx] = GetElement(Bsub, ty, tx);
+        __syncthreads();
+
+        for (int e = 0; e < BLOCK_SIZE; ++e)
+            sum += As[ty][e] * Bs[e][tx];
+        __syncthreads();
+    }
+
+    int globalRow = by * BLOCK_SIZE + ty;
+    int globalCol = bx * BLOCK_SIZE + tx;
+    if (globalRow < C.height && globalCol < C.width)
+        SetElement(Csub, ty, tx, sum);
+}
+\end{lstlisting}
+\begin{lstlisting}[language=C, caption={ Matrix multiplication using Constant Memory}]
+__global__ void MatMulConstant(Matrix A, Matrix B, Matrix C) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= C.height || col >= C.width) return;
+
+    int sum = 0;
+    for (int k = 0; k < A.width; ++k)
+        sum += GetElement(A, row, k) * constB[k * B.width + col];
+    SetElement(C, row, col, sum);
+}
+
+\section{Conclusion}
+Employing shared memory improves performance for large matrices if the tile size is chosen appropriately. Constant memory is optimal only for very small data due to size constraints. Global-only approaches, while simpler, are significantly less efficient at large scales due to limited memory bandwidth reuse.
+
+\end{lstlisting}
+\section*{References}
+\begin{thebibliography}{1}
+\bibitem{nvidia-global-memory}
+NVIDIA Developer Blog, ``Unlock GPU Performance: Global Memory Access in CUDA,'' \url{https://developer.nvidia.com/blog/unlock-gpu-performance-global-memory-access-in-cuda/}. Accessed 9 November 2025.
+\end{thebibliography}
+\end{document}

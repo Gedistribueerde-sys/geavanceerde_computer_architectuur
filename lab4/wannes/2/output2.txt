@@ -1,0 +1,544 @@
+# ❯ ./main2
+
+# BLOCK_SIZE = 16
+
+# === N =    8 x 8 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0073 ms
+#   ├ Host to Device (B) :     0.0053 ms
+#   └ Host to Constant (B):     0.0030 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (1x1)                 │     0.0044 │ PASS       │
+#   │ Shared (N not multiple)      │          - │ -          │
+#   │ Load to Shared (N not mult)  │          - │ -          │
+#   │ Constant (1x1)               │     0.0047 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 16   x 16 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0060 ms
+#   ├ Host to Device (B) :     0.0059 ms
+#   └ Host to Constant (B):     0.0020 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (1x1)                 │     0.0048 │ PASS       │
+#   │ Shared (1x1)                 │     0.0046 │ PASS       │
+#   │ Load to Shared (1x1)         │    0.0039  │ -          │
+#   │ Constant (1x1)               │     0.0074 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 32   x 32 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0074 ms
+#   ├ Host to Device (B) :     0.0063 ms
+#   └ Host to Constant (B):     0.0017 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (2x2)                 │     0.0050 │ PASS       │
+#   │ Shared (2x2)                 │     0.0049 │ PASS       │
+#   │ Load to Shared (2x2)         │    0.0036  │ -          │
+#   │ Constant (2x2)               │     0.0133 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 64   x 64 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0127 ms
+#   ├ Host to Device (B) :     0.0089 ms
+#   └ Host to Constant (B):     0.0015 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (4x4)                 │     0.0065 │ PASS       │
+#   │ Shared (4x4)                 │     0.0059 │ PASS       │
+#   │ Load to Shared (4x4)         │    0.0042  │ -          │
+#   │ Constant (4x4)               │     0.0228 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 96   x 96 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0183 ms
+#   ├ Host to Device (B) :     0.0142 ms
+#   └ Host to Constant (B):     0.0021 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (6x6)                 │     0.0095 │ PASS       │
+#   │ Shared (6x6)                 │     0.0084 │ PASS       │
+#   │ Load to Shared (6x6)         │    0.0039  │ -          │
+#   │ Constant (6x6)               │     0.0399 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 192  x 192 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0306 ms
+#   ├ Host to Device (B) :     0.0242 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (12x12)               │     0.0295 │ PASS       │
+#   │ Shared (12x12)               │     0.0264 │ PASS       │
+#   │ Load to Shared (12x12)       │    0.0062  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 384  x 384 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.3052 ms
+#   ├ Host to Device (B) :     0.1244 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (24x24)               │     0.1904 │ PASS       │
+#   │ Shared (24x24)               │     0.1441 │ PASS       │
+#   │ Load to Shared (24x24)       │    0.0105  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 768  x 768 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.8889 ms
+#   ├ Host to Device (B) :     0.7487 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (48x48)               │     1.3829 │ PASS       │
+#   │ Shared (48x48)               │     0.8157 │ PASS       │
+#   │ Load to Shared (48x48)       │    0.0457  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+# ❯ ./main2
+
+# BLOCK_SIZE = 16
+
+# === N =    8 x 8 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0058 ms
+#   ├ Host to Device (B) :     0.0053 ms
+#   └ Host to Constant (B):     0.0028 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (1x1)                 │     0.0044 │ PASS       │
+#   │ Shared (N not multiple)      │          - │ -          │
+#   │ Load to Shared (N not mult)  │          - │ -          │
+#   │ Constant (1x1)               │     0.0046 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 16   x 16 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0055 ms
+#   ├ Host to Device (B) :     0.0054 ms
+#   └ Host to Constant (B):     0.0018 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (1x1)                 │     0.0045 │ PASS       │
+#   │ Shared (1x1)                 │     0.0047 │ PASS       │
+#   │ Load to Shared (1x1)         │    0.0080  │ -          │
+#   │ Constant (1x1)               │     0.0074 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 32   x 32 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0064 ms
+#   ├ Host to Device (B) :     0.0063 ms
+#   └ Host to Constant (B):     0.0017 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (2x2)                 │     0.0053 │ PASS       │
+#   │ Shared (2x2)                 │     0.0050 │ PASS       │
+#   │ Load to Shared (2x2)         │    0.0038  │ -          │
+#   │ Constant (2x2)               │     0.0108 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 64   x 64 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0087 ms
+#   ├ Host to Device (B) :     0.0091 ms
+#   └ Host to Constant (B):     0.0018 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (4x4)                 │     0.0065 │ PASS       │
+#   │ Shared (4x4)                 │     0.0060 │ PASS       │
+#   │ Load to Shared (4x4)         │    0.0039  │ -          │
+#   │ Constant (4x4)               │     0.0257 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 96   x 96 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0163 ms
+#   ├ Host to Device (B) :     0.0152 ms
+#   └ Host to Constant (B):     0.0021 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (6x6)                 │     0.0092 │ PASS       │
+#   │ Shared (6x6)                 │     0.0089 │ PASS       │
+#   │ Load to Shared (6x6)         │    0.0044  │ -          │
+#   │ Constant (6x6)               │     0.0402 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 192  x 192 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.1554 ms
+#   ├ Host to Device (B) :     0.0326 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (12x12)               │     0.0298 │ PASS       │
+#   │ Shared (12x12)               │     0.0294 │ PASS       │
+#   │ Load to Shared (12x12)       │    0.0057  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 384  x 384 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.1688 ms
+#   ├ Host to Device (B) :     0.1475 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (24x24)               │     0.1904 │ PASS       │
+#   │ Shared (24x24)               │     0.1437 │ PASS       │
+#   │ Load to Shared (24x24)       │    0.0104  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 768  x 768 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.4909 ms
+#   ├ Host to Device (B) :     0.5873 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (48x48)               │     1.3728 │ PASS       │
+#   │ Shared (48x48)               │     0.8803 │ PASS       │
+#   │ Load to Shared (48x48)       │    0.0465  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ❯ ./main2
+
+# BLOCK_SIZE = 4
+
+# === N =    8 x 8 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0053 ms
+#   ├ Host to Device (B) :     0.0051 ms
+#   └ Host to Constant (B):     0.0026 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (2x2)                 │     0.0035 │ PASS       │
+#   │ Shared (2x2)                 │     0.0035 │ PASS       │
+#   │ Load to Shared (2x2)         │    0.0030  │ -          │
+#   │ Constant (2x2)               │     0.0035 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 16   x 16 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0051 ms
+#   ├ Host to Device (B) :     0.0052 ms
+#   └ Host to Constant (B):     0.0018 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (4x4)                 │     0.0033 │ PASS       │
+#   │ Shared (4x4)                 │     0.0036 │ PASS       │
+#   │ Load to Shared (4x4)         │    0.0035  │ -          │
+#   │ Constant (4x4)               │     0.0038 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 32   x 32 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0059 ms
+#   ├ Host to Device (B) :     0.0058 ms
+#   └ Host to Constant (B):     0.0017 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (8x8)                 │     0.0040 │ PASS       │
+#   │ Shared (8x8)                 │     0.0045 │ PASS       │
+#   │ Load to Shared (8x8)         │    0.0032  │ -          │
+#   │ Constant (8x8)               │     0.0046 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 64   x 64 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0105 ms
+#   ├ Host to Device (B) :     0.0102 ms
+#   └ Host to Constant (B):     0.0017 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (16x16)               │     0.0056 │ PASS       │
+#   │ Shared (16x16)               │     0.0069 │ PASS       │
+#   │ Load to Shared (16x16)       │    0.0035  │ -          │
+#   │ Constant (16x16)             │     0.0078 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 96   x 96 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0146 ms
+#   ├ Host to Device (B) :     0.0158 ms
+#   └ Host to Constant (B):     0.0020 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (24x24)               │     0.0108 │ PASS       │
+#   │ Shared (24x24)               │     0.0127 │ PASS       │
+#   │ Load to Shared (24x24)       │    0.0049  │ -          │
+#   │ Constant (24x24)             │     0.0219 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 192  x 192 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0274 ms
+#   ├ Host to Device (B) :     0.0244 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (48x48)               │     0.0445 │ PASS       │
+#   │ Shared (48x48)               │     0.0590 │ PASS       │
+#   │ Load to Shared (48x48)       │    0.0206  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 384  x 384 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.1298 ms
+#   ├ Host to Device (B) :     0.1536 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (96x96)               │     0.3166 │ PASS       │
+#   │ Shared (96x96)               │     0.4025 │ PASS       │
+#   │ Load to Shared (96x96)       │    0.1068  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 768  x 768 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.4406 ms
+#   ├ Host to Device (B) :     0.7230 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (192x192)             │     2.6659 │ PASS       │
+#   │ Shared (192x192)             │     3.4626 │ PASS       │
+#   │ Load to Shared (192x192)     │    0.8425  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+# ❯ ./main2
+
+# # BLOCK_SIZE = 4
+
+# === N =    8 x 8 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0058 ms
+#   ├ Host to Device (B) :     0.0058 ms
+#   └ Host to Constant (B):     0.0026 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (2x2)                 │     0.0042 │ PASS       │
+#   │ Shared (2x2)                 │     0.0044 │ PASS       │
+#   │ Load to Shared (2x2)         │    0.0037  │ -          │
+#   │ Constant (2x2)               │     0.0044 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 16   x 16 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0059 ms
+#   ├ Host to Device (B) :     0.0057 ms
+#   └ Host to Constant (B):     0.0017 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (4x4)                 │     0.0043 │ PASS       │
+#   │ Shared (4x4)                 │     0.0049 │ PASS       │
+#   │ Load to Shared (4x4)         │    0.0038  │ -          │
+#   │ Constant (4x4)               │     0.0048 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 32   x 32 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0062 ms
+#   ├ Host to Device (B) :     0.0062 ms
+#   └ Host to Constant (B):     0.0017 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (8x8)                 │     0.0052 │ PASS       │
+#   │ Shared (8x8)                 │     0.0057 │ PASS       │
+#   │ Load to Shared (8x8)         │    0.0042  │ -          │
+#   │ Constant (8x8)               │     0.0060 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 64   x 64 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0084 ms
+#   ├ Host to Device (B) :     0.0089 ms
+#   └ Host to Constant (B):     0.0017 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (16x16)               │     0.0072 │ PASS       │
+#   │ Shared (16x16)               │     0.0080 │ PASS       │
+#   │ Load to Shared (16x16)       │    0.0043  │ -          │
+#   │ Constant (16x16)             │     0.0106 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 96   x 96 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0121 ms
+#   ├ Host to Device (B) :     0.0126 ms
+#   └ Host to Constant (B):     0.0020 ms
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (24x24)               │     0.0136 │ PASS       │
+#   │ Shared (24x24)               │     0.0176 │ PASS       │
+#   │ Load to Shared (24x24)       │    0.0060  │ -          │
+#   │ Constant (24x24)             │     0.0270 │ PASS       │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 192  x 192 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.0248 ms
+#   ├ Host to Device (B) :     0.0223 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (48x48)               │     0.0623 │ PASS       │
+#   │ Shared (48x48)               │     0.0798 │ PASS       │
+#   │ Load to Shared (48x48)       │    0.0234  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 384  x 384 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.1600 ms
+#   ├ Host to Device (B) :     0.1069 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (96x96)               │     0.4358 │ PASS       │
+#   │ Shared (96x96)               │     0.5404 │ PASS       │
+#   │ Load to Shared (96x96)       │    0.1457  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
+
+# === N = 768  x 768 ===
+#   Memory Transfers (avg over 10 runs):
+#   ├ Host to Device (A) :     0.5059 ms
+#   ├ Host to Device (B) :     0.5777 ms
+#   └ Host to Constant (B):  (too large)
+
+#   Kernel Benchmarks (avg over 100 runs):
+#   ┌──────────────────────────────┬────────────┬────────────┐
+#   │ Kernel (grid)                │ Time (ms)  │ Verify     │
+#   ├──────────────────────────────┼────────────┼────────────┤
+#   │ Global (192x192)             │     3.0103 │ PASS       │
+#   │ Shared (192x192)             │     3.4681 │ PASS       │
+#   │ Load to Shared (192x192)     │    0.8385  │ -          │
+#   │ Constant (too large)         │          - │ -          │
+#   └──────────────────────────────┴────────────┴────────────┘
