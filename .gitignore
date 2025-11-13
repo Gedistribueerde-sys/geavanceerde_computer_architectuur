@@ -72,3 +72,6 @@ build/
 .next/
 out/
 public/
+
+.venv
+DATA
