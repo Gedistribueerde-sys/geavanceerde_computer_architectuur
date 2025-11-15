@@ -1,16 +1,17 @@
 #pragma once
-#include "las_reader.h"
 #include <vector>
+#include "point.h"
 
-struct Voxel {
-    float x, y, z;           // Center position
-    uint8_t r, g, b;         // Average RGB
-    uint32_t pointCount;     // Number of points in this voxel
-};
 
 // GPU voxelization function
-void voxelizeOnGPU(
+std::vector<Point> voxelizeOnGPU(
     const std::vector<Point>& hostPoints,
-    float voxelSize,
-    std::vector<Voxel>& outputVoxels
+    size_t totalPoints,
+    float voxelSize
+);
+
+std::vector<Point> voxelizeOnCPU(
+    const std::vector<Point>& hostPoints,
+    size_t totalPoints,
+    float voxelSize
 );

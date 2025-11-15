@@ -9,7 +9,7 @@ VOXEL_SIZE=0.5
 # Import dataset with laspy
 point_cloud = lp.read(pcd_path)
 xyz = np.vstack((point_cloud.x, point_cloud.y, point_cloud.z)).transpose()
-rgb = np.vstack((point_cloud.red, point_cloud.green, point_cloud.blue)).transpose() / 65535
+rgb = np.vstack((point_cloud.red, point_cloud.green, point_cloud.blue)).transpose() / 65535 # Normalize colors to [0, 1]
 
 # Transform to open3d point cloud
 pcd = o3d.geometry.PointCloud()

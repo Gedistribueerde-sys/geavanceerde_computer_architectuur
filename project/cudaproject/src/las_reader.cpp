@@ -1,6 +1,6 @@
 #include "las_reader.h"
 
-std::vector<Point> readLASFileNormalized(const std::string& filename) {
+PointCloudVecs readLASFileNormalized(const std::string& filename) {
     using namespace pdal;
 
     std::cout << "Reading LAS file: " << filename << "\n";
@@ -36,7 +36,7 @@ std::vector<Point> readLASFileNormalized(const std::string& filename) {
         }
     }
 
-    
+    PointCloudVecs pcVecs;
     // Second pass: read points and normalize
     for (auto& view : viewSet) {
         std::cout << "Processing view with " << view->size() << " points\n";
@@ -45,19 +45,20 @@ std::vector<Point> readLASFileNormalized(const std::string& filename) {
             Point p = {};
             
             try {
-                p.x = static_cast<float>(view->getFieldAs<double>(Dimension::Id::X, i)) - minX;
-                p.y = static_cast<float>(view->getFieldAs<double>(Dimension::Id::Y, i)) - minY;
-                p.z = static_cast<float>(view->getFieldAs<double>(Dimension::Id::Z, i)) - minZ;
-            
-                
-                // RGB values are 16-bit in LAS
-                if (table.layout()->hasDim(Dimension::Id::Red)) {
-                    p.r = static_cast<uint8_t>(view->getFieldAs<uint16_t>(Dimension::Id::Red, i) >> 8);
-                    p.g = static_cast<uint8_t>(view->getFieldAs<uint16_t>(Dimension::Id::Green, i) >> 8);
-                    p.b = static_cast<uint8_t>(view->getFieldAs<uint16_t>(Dimension::Id::Blue, i) >> 8);
-                }
-                
-                points.push_back(p);
+                pcVecs.x.push_back(view->getFieldAs<double>(Dimension::Id::X, i) - minX);
+                pcVecs.y.push_back(view->getFieldAs<double>(Dimension::Id::Y, i) - minY);
+                pcVecs.z.push_back(view->getFieldAs<double>(Dimension::Id::Z, i) - minZ);
+
+                if (hasColorData(table)) {
+                    pcVecs.r.push_back(view->getFieldAs<uint16_t>(Dimension::Id::Red, i) >> 8);
+                    pcVecs.g.push_back(view->getFieldAs<uint16_t>(Dimension::Id::Green, i) >> 8);
+                    pcVecs.b.push_back(view->getFieldAs<uint16_t>(Dimension::Id::Blue, i) >> 8);
+                } else {
+                    pcVecs.r.push_back(0);
+                    pcVecs.g.push_back(0);
+                    pcVecs.b.push_back(0);
+}
+
             } catch (const std::exception& e) {
                 std::cerr << "Error reading point " << i << ": " << e.what() << "\n";
                 continue;
@@ -65,7 +66,13 @@ std::vector<Point> readLASFileNormalized(const std::string& filename) {
         }
     }
     
-    std::cout << "Successfully loaded " << points.size() << " points\n";
+    std::cout << "Successfully loaded " << pcVecs.x.size() << " points\n";
     
-    return points;
+    return pcVecs;
+}
+
+bool hasColorData(const pdal::PointTable& table) {
+    return table.layout()->hasDim(pdal::Dimension::Id::Red) &&
+           table.layout()->hasDim(pdal::Dimension::Id::Green) &&
+           table.layout()->hasDim(pdal::Dimension::Id::Blue);
 }

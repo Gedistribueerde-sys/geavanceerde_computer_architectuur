@@ -6,10 +6,8 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include "point.h"
 
-struct Point {
-    float x, y, z;
-    uint8_t r, g, b;  // RGB colors
-};
 
-std::vector<Point> readLASFileNormalized(const std::string& filename);
+PointCloudVecs readLASFileNormalized(const std::string& filename);
+bool hasColorData(const pdal::PointTable& table);

@@ -7,17 +7,11 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    // 1. Read the las file
     std::string inputFile = argv[1];
-    std::vector<Point> points = readLASFileNormalized(inputFile);
-
-    for (int i = 0; i < 50 && i < points.size(); i++) {
-        const Point& p = points[i];
-        std::cout << "Point " << i << ": (" << p.x << ", " << p.y << ", " << p.z  << ")"
-                  << ", Color: (" << static_cast<int>(p.r) << ", " 
-                  << static_cast<int>(p.g) << ", " 
-                  << static_cast<int>(p.b) << ")\n";
-    }
+    PointCloudVecs pcVecs = readLASFileNormalized(inputFile);
     
-    std::cout << "Total points read: " << points.size() << "\n";
+    size_t totalPoints = pcVecs.x.size();   
+    std::cout << "Total points read: " << totalPoints << "\n";
     return 0;
 }
