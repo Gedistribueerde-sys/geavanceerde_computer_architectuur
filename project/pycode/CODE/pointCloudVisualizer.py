@@ -2,7 +2,7 @@ import numpy as np
 import open3d as o3d
 import laspy as lp
 
-pcd_path = "../DATA/neighborhood.las"
+pcd_path = "project/pycode/DATA/neighborhood.las"
 
 VOXEL_SIZE=0.5
 
@@ -23,29 +23,34 @@ o3d.visualization.draw_geometries([pcd])
 mins = np.min(xyz, axis=0)
 maxs = np.max(xyz, axis=0)
 
-#normalise this
-print("some basic printouts ")
-print (mins)
-print("-------")
-print (maxs)
+# normalize the coordinates
 xyz_shifted = xyz - mins
 
 
 voxel_indices = (xyz_shifted // VOXEL_SIZE).astype(int)
 
-snapped_points = (voxel_indices * VOXEL_SIZE) + (VOXEL_SIZE / 2)
+unique_voxels, inverse = np.unique(voxel_indices, axis=0, return_inverse=True)
+voxel_colors = np.zeros((len(unique_voxels), 3))
 
-# Visualize Snapped Points as Voxel Blocks
-# Create a mesh for each voxel
+# Sum colors per voxel
+np.add.at(voxel_colors, inverse, rgb)
+
+# Count points per voxel
+counts = np.bincount(inverse)
+
+# Average colors
+voxel_colors /= counts[:, None]
+
 mesh_list = []
-for i, (center, color) in enumerate(zip(snapped_points, rgb)):
-    # Create a cube centered at the voxel center
-    cube = o3d.geometry.TriangleMesh.create_box(width=VOXEL_SIZE, height=VOXEL_SIZE, depth=VOXEL_SIZE)
-    # Translate cube to voxel center
-    cube.translate(center - VOXEL_SIZE / 2)
-    # Assign color to the cube
+for center_idx, voxel in enumerate(unique_voxels):
+    center = voxel * VOXEL_SIZE + VOXEL_SIZE/2
+    color = voxel_colors[center_idx]
+
+    cube = o3d.geometry.TriangleMesh.create_box(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE)
+    cube.translate(center - VOXEL_SIZE/2)
     cube.paint_uniform_color(color)
     mesh_list.append(cube)
+
 
 # Combine all meshes
 voxel_mesh = o3d.geometry.TriangleMesh()

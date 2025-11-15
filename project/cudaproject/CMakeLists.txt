@@ -16,7 +16,11 @@ add_executable(voxelizer
     src/main.cpp
     src/las_reader.cpp
     src/ply_writer.cpp
+    src/voxelizer.cu
 )
+
+# Set CUDA compilation for voxelizer.cu
+set_source_files_properties(src/voxelizer.cu PROPERTIES LANGUAGE CUDA)
 
 # Link PDAL
 target_link_libraries(voxelizer PRIVATE ${PDAL_LIBRARIES})
