@@ -6,4 +6,4 @@
 - [ ] implement level 2
 
 # C++ Code
-- [ ] setting up c++ environment
+- [x] setting up c++ environment
