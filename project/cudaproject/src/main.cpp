@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
         dummy.r = {0, 0, 0};
         dummy.g = {0, 0, 0};
         dummy.b = {0, 0, 0};
-        voxelizeMortonOnGPU(dummy, 3, 1.0f);
+        voxelizeMortonOnGPU(dummy, 3, 1.0f ,256);
     }
     std::cout << "GPU warmed up.\n\n";
 
@@ -45,10 +45,12 @@ int main(int argc, char** argv) {
     std::cout << "CPU voxels: " << voxelizedCPU.size() << std::endl;
     std::cout << "CPU time: " << std::fixed << std::setprecision(2) << cpuTimeMs << " ms\n\n";
 
+
+
     // GPU Voxelization (Morton code based)
     std::cout << "=== GPU Voxelization (Morton) ===" << std::endl;
     auto gpuStart = std::chrono::high_resolution_clock::now();
-    std::vector<Point> voxelizedGPU = voxelizeMortonOnGPU(pcVecs, totalPoints, voxelSize);
+    std::vector<Point> voxelizedGPU = voxelizeMortonOnGPU(pcVecs, totalPoints, voxelSize, 256); // 256 = block size
     auto gpuEnd = std::chrono::high_resolution_clock::now();
     double gpuTimeMs = std::chrono::duration<double, std::milli>(gpuEnd - gpuStart).count();
     std::cout << "GPU voxels: " << voxelizedGPU.size() << std::endl;
@@ -66,6 +68,15 @@ int main(int argc, char** argv) {
     std::cout << "  CPU: " << cpuTimeMs << " ms" << std::endl;
     std::cout << "  GPU: " << gpuTimeMs << " ms" << std::endl;
     std::cout << "  Speedup: " << std::setprecision(2) << cpuTimeMs / gpuTimeMs << "x\n\n";
+
+    for (int i = 1; i <= 1024; i *= 2){
+        std::cout << "=== GPU Voxelization (Morton) === Block size: " << i << std::endl;
+        auto gpuStart = std::chrono::high_resolution_clock::now();
+        std::vector<Point> voxelizedGPU = voxelizeMortonOnGPU_timed(pcVecs, totalPoints, voxelSize, i, 100); // 256 = block size
+        auto gpuEnd = std::chrono::high_resolution_clock::now();
+        double gpuTimeMs = std::chrono::duration<double, std::milli>(gpuEnd - gpuStart).count();
+        
+    }
 
     // Sample output comparison
     std::cout << "=== Sample Points (first 5) ===" << std::endl;

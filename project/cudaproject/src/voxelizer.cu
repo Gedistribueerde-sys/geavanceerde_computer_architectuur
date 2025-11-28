@@ -5,6 +5,7 @@
 #include <map>
 #include <cmath>
 #include <algorithm>
+#include <chrono> // added for timing
 
 // Thrust includes for Morton code sorting approach
 #include <thrust/device_vector.h>
@@ -103,10 +104,178 @@ __global__ void createPointAccumKernel(
                               r[origIdx], g[origIdx], b[origIdx]);
 }
 
+std::vector<Point> voxelizeMortonOnGPU_timed(
+    const PointCloudVecs& hostPoints,
+    size_t totalPoints,
+    float voxelSize,
+    int blockSize,
+    int runs) // added runs parameter
+{
+    if (totalPoints == 0) {
+        return std::vector<Point>();
+    }
+    if (runs < 1) runs = 1;
+
+    std::vector<Point> result; // will hold the result from the last run
+    double totalMs = 0.0;
+
+    // Events for timing individual GPU segments
+    cudaEvent_t sMorton, eMorton;
+    cudaEvent_t sSort, eSort;
+    cudaEvent_t sCreate, eCreate;
+    cudaEvent_t sReduce, eReduce;
+    cudaEvent_t sCopy, eCopy;
+
+    cudaEventCreate(&sMorton); cudaEventCreate(&eMorton);
+    cudaEventCreate(&sSort);   cudaEventCreate(&eSort);
+    cudaEventCreate(&sCreate); cudaEventCreate(&eCreate);
+    cudaEventCreate(&sReduce); cudaEventCreate(&eReduce);
+    cudaEventCreate(&sCopy);   cudaEventCreate(&eCopy);
+
+    float totalMortonMs = 0.0f;
+    float totalSortMs   = 0.0f;
+    float totalCreateMs = 0.0f;
+    float totalReduceMs = 0.0f;
+    float totalCopyMs   = 0.0f;
+
+    for (int run = 0; run < runs; ++run) {
+        auto t0 = std::chrono::high_resolution_clock::now();
+
+        // Find bounds on CPU (could also do on GPU with Thrust)
+        float minX = *std::min_element(hostPoints.x.begin(), hostPoints.x.end());
+        float minY = *std::min_element(hostPoints.y.begin(), hostPoints.y.end());
+        float minZ = *std::min_element(hostPoints.z.begin(), hostPoints.z.end());
+        float invVoxelSize = 1.0f / voxelSize;
+
+        // Allocate device memory for input points
+        thrust::device_vector<float> d_x(hostPoints.x.begin(), hostPoints.x.end());
+        thrust::device_vector<float> d_y(hostPoints.y.begin(), hostPoints.y.end());
+        thrust::device_vector<float> d_z(hostPoints.z.begin(), hostPoints.z.end());
+        thrust::device_vector<uint8_t> d_r(hostPoints.r.begin(), hostPoints.r.end());
+        thrust::device_vector<uint8_t> d_g(hostPoints.g.begin(), hostPoints.g.end());
+        thrust::device_vector<uint8_t> d_b(hostPoints.b.begin(), hostPoints.b.end());
+
+        // Step 1: Compute Morton codes
+        thrust::device_vector<uint64_t> d_mortonCodes(totalPoints);
+        thrust::device_vector<uint32_t> d_indices(totalPoints);
+        thrust::sequence(d_indices.begin(), d_indices.end());
+
+        int numBlocks = (totalPoints + blockSize - 1) / blockSize;
+
+        // time computeMortonCodesKernel
+        cudaEventRecord(sMorton);
+        computeMortonCodesKernel<<<numBlocks, blockSize>>>(
+            thrust::raw_pointer_cast(d_x.data()),
+            thrust::raw_pointer_cast(d_y.data()),
+            thrust::raw_pointer_cast(d_z.data()),
+            thrust::raw_pointer_cast(d_mortonCodes.data()),
+            minX, minY, minZ,
+            invVoxelSize,
+            totalPoints
+        );
+        cudaEventRecord(eMorton);
+        cudaEventSynchronize(eMorton);
+        float ms = 0.0f;
+        cudaEventElapsedTime(&ms, sMorton, eMorton);
+        totalMortonMs += ms;
+
+        // Step 2: Sort indices by Morton code (time with events)
+        cudaEventRecord(sSort);
+        thrust::sort_by_key(d_mortonCodes.begin(), d_mortonCodes.end(), d_indices.begin());
+        cudaEventRecord(eSort);
+        cudaEventSynchronize(eSort);
+        cudaEventElapsedTime(&ms, sSort, eSort);
+        totalSortMs += ms;
+
+        // Step 3: Create PointAccum for each point (reordered by Morton code)
+        thrust::device_vector<PointAccum> d_accums(totalPoints);
+        cudaEventRecord(sCreate);
+        createPointAccumKernel<<<numBlocks, blockSize>>>(
+            thrust::raw_pointer_cast(d_x.data()),
+            thrust::raw_pointer_cast(d_y.data()),
+            thrust::raw_pointer_cast(d_z.data()),
+            thrust::raw_pointer_cast(d_r.data()),
+            thrust::raw_pointer_cast(d_g.data()),
+            thrust::raw_pointer_cast(d_b.data()),
+            thrust::raw_pointer_cast(d_indices.data()),
+            thrust::raw_pointer_cast(d_accums.data()),
+            totalPoints
+        );
+        cudaEventRecord(eCreate);
+        cudaEventSynchronize(eCreate);
+        cudaEventElapsedTime(&ms, sCreate, eCreate);
+        totalCreateMs += ms;
+
+        // Step 4: Reduce by key (Morton code) to accumulate points per voxel
+        thrust::device_vector<uint64_t> d_uniqueMorton(totalPoints);
+        thrust::device_vector<PointAccum> d_reducedAccums(totalPoints);
+
+        cudaEventRecord(sReduce);
+        auto reduceEnd = thrust::reduce_by_key(
+            d_mortonCodes.begin(), d_mortonCodes.end(),
+            d_accums.begin(),
+            d_uniqueMorton.begin(),
+            d_reducedAccums.begin(),
+            thrust::equal_to<uint64_t>(),
+            PointAccumOp()
+        );
+        cudaEventRecord(eReduce);
+        cudaEventSynchronize(eReduce);
+        cudaEventElapsedTime(&ms, sReduce, eReduce);
+        totalReduceMs += ms;
+
+        size_t numVoxels = reduceEnd.first - d_uniqueMorton.begin();
+
+        // Step 5: Copy reduced accumulators back to host and compute averages
+        std::vector<PointAccum> h_accums(numVoxels);
+        cudaEventRecord(sCopy);
+        thrust::copy(d_reducedAccums.begin(), d_reducedAccums.begin() + numVoxels, h_accums.begin());
+        cudaEventRecord(eCopy);
+        cudaEventSynchronize(eCopy);
+        cudaEventElapsedTime(&ms, sCopy, eCopy);
+        totalCopyMs += ms;
+
+        // Convert accumulators to final points
+        result.assign(numVoxels, Point());
+        for (size_t i = 0; i < numVoxels; i++) {
+            const PointAccum& acc = h_accums[i];
+            float c = static_cast<float>(acc.count);
+            result[i].x = acc.sumX / c;
+            result[i].y = acc.sumY / c;
+            result[i].z = acc.sumZ / c;
+            result[i].r = static_cast<uint8_t>(acc.sumR / acc.count);
+            result[i].g = static_cast<uint8_t>(acc.sumG / acc.count);
+            result[i].b = static_cast<uint8_t>(acc.sumB / acc.count);
+        }
+
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double runMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        totalMs += runMs;
+    }
+
+    // destroy events
+    cudaEventDestroy(sMorton); cudaEventDestroy(eMorton);
+    cudaEventDestroy(sSort);   cudaEventDestroy(eSort);
+    cudaEventDestroy(sCreate); cudaEventDestroy(eCreate);
+    cudaEventDestroy(sReduce); cudaEventDestroy(eReduce);
+    cudaEventDestroy(sCopy);   cudaEventDestroy(eCopy);
+
+    // Print averages (per-segment)
+    std::cout << "voxelizeMortonOnGPU_timed overall average over " << runs << " runs: "
+              << (totalMs / runs) << " ms\n";
+    std::cout << "  computeMortonCodesKernel avg: " << (totalMortonMs / runs) << " ms\n";
+    std::cout << "  sort_by_key avg:              " << (totalSortMs   / runs) << " ms\n";
+    std::cout << "  createPointAccumKernel avg:   " << (totalCreateMs / runs) << " ms\n";
+    std::cout << "  reduce_by_key avg:cle            " << (totalReduceMs / runs) << " ms\n";
+    std::cout << "  copy reduced accums avg:      " << (totalCopyMs   / runs) << " ms\n";
+
+    return result;
+}
 std::vector<Point> voxelizeMortonOnGPU(
     const PointCloudVecs& hostPoints,
     size_t totalPoints,
-    float voxelSize)
+    float voxelSize,
+    int blockSize)
 {
     if (totalPoints == 0) {
         return std::vector<Point>();
@@ -133,7 +302,7 @@ std::vector<Point> voxelizeMortonOnGPU(
     // Initialize indices to 0, 1, 2, ...
     thrust::sequence(d_indices.begin(), d_indices.end());
     
-    int blockSize = 256;
+   
     int numBlocks = (totalPoints + blockSize - 1) / blockSize;
     
     computeMortonCodesKernel<<<numBlocks, blockSize>>>(
@@ -200,8 +369,7 @@ std::vector<Point> voxelizeMortonOnGPU(
 
     return result;
 }
-
-std::vector<Point> voxelizeUniformOnCPU(
+std::vector<Point> voxelizeUniformOnCPU_timed(
     const PointCloudVecs& hostPoints,
     size_t totalPoints,
     float voxelSize)
