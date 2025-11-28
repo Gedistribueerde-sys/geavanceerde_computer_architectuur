@@ -17,6 +17,8 @@ add_executable(voxelizer
     src/las_reader.cpp
     src/ply_writer.cpp
     src/voxelizer.cu
+    src/hashvoxelizer.cu
+    
 )
 
 # Set CUDA compilation for voxelizer.cu

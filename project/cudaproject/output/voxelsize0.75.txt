@@ -1,0 +1,418 @@
+Reading LAS file: ../../neighborhood.las
+Number of point views: 1
+Processing view with 648433 points
+Successfully loaded 648433 points
+Total points read: 648433
+Voxel size: 0.75
+
+Warming up GPU...
+GPU warmed up.
+
+=== CPU Voxelization ===
+CPU voxels: 89869
+CPU time: 272.93 ms
+
+=== GPU Voxelization (Morton) ===
+GPU voxels: 89869
+GPU time: 31.05 ms
+
+=== Summary (Morton)===
+Input points:      648433
+Voxel size:        0.75
+CPU output voxels: 89869
+GPU output voxels: 89869
+Compression ratio: 7.22x
+
+Timing:
+  CPU: 272.93 ms
+  GPU: 31.05 ms
+  Speedup: 8.79x
+
+=== Sample Points (first 5) ===
+Original:
+  [0] x=12.91 y=10.86 z=6.37 rgb=(64,74,41)
+  [1] x=12.99 y=10.61 z=6.32 rgb=(123,104,81)
+  [2] x=13.06 y=10.36 z=6.29 rgb=(139,117,90)
+  [3] x=12.98 y=10.84 z=7.72 rgb=(64,61,42)
+  [4] x=12.54 y=10.72 z=6.37 rgb=(94,82,46)
+CPU voxelized:
+  [0] x=1.16 y=4.33 z=5.99 rgb=(40,49,57)
+  [1] x=1.35 y=5.09 z=5.99 rgb=(56,63,67)
+  [2] x=1.35 y=5.76 z=6.00 rgb=(23,33,43)
+  [3] x=1.90 y=4.39 z=5.95 rgb=(32,41,49)
+  [4] x=2.63 y=4.37 z=5.95 rgb=(31,39,48)
+GPU voxelized:
+  [0] x=1.16 y=4.33 z=5.99 rgb=(40,49,57)
+  [1] x=1.35 y=5.09 z=5.99 rgb=(56,63,67)
+  [2] x=1.35 y=5.76 z=6.00 rgb=(23,33,43)
+  [3] x=1.90 y=4.39 z=5.95 rgb=(32,41,49)
+  [4] x=2.63 y=4.37 z=5.95 rgb=(31,39,48)
+
+=== Bounds ===
+Original: X[0, 166.72], Y[0, 94.46], Z[0, 35.87]
+Successfully wrote 648433 points to original.ply
+Successfully wrote 89869 points to voxelized_cpu.ply
+Successfully wrote 89869 points to voxelized_gpu.ply
+
+Output files written: original.ply, voxelized_cpu.ply, voxelized_gpu.ply
+hashtable
+Warming up GPU...
+GPU warmed up.
+
+=== GPU Voxelization (Hash)==factor = 2
+GPU voxels: 89869
+GPU time: 25.87 ms
+
+=== Summary (Hash)===
+Input points:      648433
+Voxel size:        0.75
+CPU output voxels: 89869
+GPU output voxels: 89869
+Compression ratio: 7.22x
+
+Timing:
+  CPU: 272.93 ms
+  GPU: 25.87 ms
+  Speedup: 10.55x
+
+=== GPU Voxelization (Morton) === Block size: 1
+voxelizeMortonOnGPU_timed overall average over 100 runs: 28.62 ms
+  computeMortonCodesKernel avg: 1.07 ms
+  sort_by_key avg:              0.92 ms
+  createPointAccumKernel avg:   1.08 ms
+  reduce_by_key avg:cle            0.17 ms
+  copy reduced accums avg:      0.28 ms
+=== GPU Voxelization (Morton) === Block size: 2
+voxelizeMortonOnGPU_timed overall average over 100 runs: 28.12 ms
+  computeMortonCodesKernel avg: 0.54 ms
+  sort_by_key avg:              0.93 ms
+  createPointAccumKernel avg:   0.54 ms
+  reduce_by_key avg:cle            0.17 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Morton) === Block size: 4
+voxelizeMortonOnGPU_timed overall average over 100 runs: 27.22 ms
+  computeMortonCodesKernel avg: 0.27 ms
+  sort_by_key avg:              0.92 ms
+  createPointAccumKernel avg:   0.29 ms
+  reduce_by_key avg:cle            0.17 ms
+  copy reduced accums avg:      0.28 ms
+=== GPU Voxelization (Morton) === Block size: 8
+voxelizeMortonOnGPU_timed overall average over 100 runs: 27.47 ms
+  computeMortonCodesKernel avg: 0.14 ms
+  sort_by_key avg:              0.93 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.18 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Morton) === Block size: 16
+voxelizeMortonOnGPU_timed overall average over 100 runs: 27.19 ms
+  computeMortonCodesKernel avg: 0.07 ms
+  sort_by_key avg:              0.95 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.18 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Morton) === Block size: 32
+voxelizeMortonOnGPU_timed overall average over 100 runs: 28.33 ms
+  computeMortonCodesKernel avg: 0.04 ms
+  sort_by_key avg:              0.96 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.18 ms
+  copy reduced accums avg:      0.30 ms
+=== GPU Voxelization (Morton) === Block size: 64
+voxelizeMortonOnGPU_timed overall average over 100 runs: 27.56 ms
+  computeMortonCodesKernel avg: 0.04 ms
+  sort_by_key avg:              0.93 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.18 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Morton) === Block size: 128
+voxelizeMortonOnGPU_timed overall average over 100 runs: 27.22 ms
+  computeMortonCodesKernel avg: 0.04 ms
+  sort_by_key avg:              0.93 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.17 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Morton) === Block size: 256
+voxelizeMortonOnGPU_timed overall average over 100 runs: 27.11 ms
+  computeMortonCodesKernel avg: 0.04 ms
+  sort_by_key avg:              0.94 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.17 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Morton) === Block size: 512
+voxelizeMortonOnGPU_timed overall average over 100 runs: 28.12 ms
+  computeMortonCodesKernel avg: 0.04 ms
+  sort_by_key avg:              0.93 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.17 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Morton) === Block size: 1024
+voxelizeMortonOnGPU_timed overall average over 100 runs: 27.96 ms
+  computeMortonCodesKernel avg: 0.04 ms
+  sort_by_key avg:              0.96 ms
+  createPointAccumKernel avg:   0.26 ms
+  reduce_by_key avg:cle            0.18 ms
+  copy reduced accums avg:      0.29 ms
+=== GPU Voxelization (Hash) === Block size: 1
+voxelizeDynamicHashMap_timed overall average over 100 runs: 33.80 ms
+  Allocation + HtoD Copy avg: 1.35 ms
+  initHashMapKernel avg:      2.00 ms
+  populateHashMapKernel avg:  1.94 ms
+  countValidBucketsKernel avg: 2.01 ms
+  collectResultsKernel avg:   1.99 ms
+  DtoH Copy + Cleanup avg:    2.79 ms
+=== GPU Voxelization (Hash) === Block size: 2
+voxelizeDynamicHashMap_timed overall average over 100 runs: 29.90 ms
+  Allocation + HtoD Copy avg: 1.37 ms
+  initHashMapKernel avg:      1.01 ms
+  populateHashMapKernel avg:  1.03 ms
+  countValidBucketsKernel avg: 0.99 ms
+  collectResultsKernel avg:   0.98 ms
+  DtoH Copy + Cleanup avg:    2.76 ms
+=== GPU Voxelization (Hash) === Block size: 4
+voxelizeDynamicHashMap_timed overall average over 100 runs: 27.63 ms
+  Allocation + HtoD Copy avg: 1.33 ms
+  initHashMapKernel avg:      0.51 ms
+  populateHashMapKernel avg:  0.60 ms
+  countValidBucketsKernel avg: 0.50 ms
+  collectResultsKernel avg:   0.50 ms
+  DtoH Copy + Cleanup avg:    2.74 ms
+=== GPU Voxelization (Hash) === Block size: 8
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.24 ms
+  Allocation + HtoD Copy avg: 1.33 ms
+  initHashMapKernel avg:      0.35 ms
+  populateHashMapKernel avg:  0.37 ms
+  countValidBucketsKernel avg: 0.26 ms
+  collectResultsKernel avg:   0.26 ms
+  DtoH Copy + Cleanup avg:    2.72 ms
+=== GPU Voxelization (Hash) === Block size: 16
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.41 ms
+  Allocation + HtoD Copy avg: 1.36 ms
+  initHashMapKernel avg:      0.35 ms
+  populateHashMapKernel avg:  0.34 ms
+  countValidBucketsKernel avg: 0.14 ms
+  collectResultsKernel avg:   0.21 ms
+  DtoH Copy + Cleanup avg:    2.88 ms
+=== GPU Voxelization (Hash) === Block size: 32
+voxelizeDynamicHashMap_timed overall average over 100 runs: 25.89 ms
+  Allocation + HtoD Copy avg: 1.27 ms
+  initHashMapKernel avg:      0.35 ms
+  populateHashMapKernel avg:  0.34 ms
+  countValidBucketsKernel avg: 0.14 ms
+  collectResultsKernel avg:   0.22 ms
+  DtoH Copy + Cleanup avg:    2.93 ms
+=== GPU Voxelization (Hash) === Block size: 64
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.03 ms
+  Allocation + HtoD Copy avg: 1.27 ms
+  initHashMapKernel avg:      0.36 ms
+  populateHashMapKernel avg:  0.35 ms
+  countValidBucketsKernel avg: 0.14 ms
+  collectResultsKernel avg:   0.22 ms
+  DtoH Copy + Cleanup avg:    2.92 ms
+=== GPU Voxelization (Hash) === Block size: 128
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.05 ms
+  Allocation + HtoD Copy avg: 1.30 ms
+  initHashMapKernel avg:      0.37 ms
+  populateHashMapKernel avg:  0.35 ms
+  countValidBucketsKernel avg: 0.14 ms
+  collectResultsKernel avg:   0.23 ms
+  DtoH Copy + Cleanup avg:    2.92 ms
+=== GPU Voxelization (Hash) === Block size: 256
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.51 ms
+  Allocation + HtoD Copy avg: 1.35 ms
+  initHashMapKernel avg:      0.37 ms
+  populateHashMapKernel avg:  0.34 ms
+  countValidBucketsKernel avg: 0.14 ms
+  collectResultsKernel avg:   0.22 ms
+  DtoH Copy + Cleanup avg:    2.93 ms
+=== GPU Voxelization (Hash) === Block size: 512
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.62 ms
+  Allocation + HtoD Copy avg: 1.41 ms
+  initHashMapKernel avg:      0.38 ms
+  populateHashMapKernel avg:  0.35 ms
+  countValidBucketsKernel avg: 0.14 ms
+  collectResultsKernel avg:   0.22 ms
+  DtoH Copy + Cleanup avg:    2.93 ms
+=== GPU Voxelization (Hash) === Block size: 1024
+voxelizeDynamicHashMap_timed overall average over 100 runs: 25.95 ms
+  Allocation + HtoD Copy avg: 1.26 ms
+  initHashMapKernel avg:      0.36 ms
+  populateHashMapKernel avg:  0.33 ms
+  countValidBucketsKernel avg: 0.14 ms
+  collectResultsKernel avg:   0.22 ms
+  DtoH Copy + Cleanup avg:    2.98 ms
+=== GPU Voxelization (Hash) === Block size: 1
+voxelizeDynamicHashMap_timed overall average over 100 runs: 36.09 ms
+  Allocation + HtoD Copy avg: 1.32 ms
+  initHashMapKernel avg:      2.81 ms
+  populateHashMapKernel avg:  1.86 ms
+  countValidBucketsKernel avg: 2.77 ms
+  collectResultsKernel avg:   2.78 ms
+  DtoH Copy + Cleanup avg:    3.55 ms
+=== GPU Voxelization (Hash) === Block size: 2
+voxelizeDynamicHashMap_timed overall average over 100 runs: 30.35 ms
+  Allocation + HtoD Copy avg: 1.35 ms
+  initHashMapKernel avg:      1.37 ms
+  populateHashMapKernel avg:  0.98 ms
+  countValidBucketsKernel avg: 1.34 ms
+  collectResultsKernel avg:   1.34 ms
+  DtoH Copy + Cleanup avg:    3.32 ms
+=== GPU Voxelization (Hash) === Block size: 4
+voxelizeDynamicHashMap_timed overall average over 100 runs: 27.99 ms
+  Allocation + HtoD Copy avg: 1.30 ms
+  initHashMapKernel avg:      0.70 ms
+  populateHashMapKernel avg:  0.55 ms
+  countValidBucketsKernel avg: 0.68 ms
+  collectResultsKernel avg:   0.68 ms
+  DtoH Copy + Cleanup avg:    3.33 ms
+=== GPU Voxelization (Hash) === Block size: 8
+voxelizeDynamicHashMap_timed overall average over 100 runs: 27.38 ms
+  Allocation + HtoD Copy avg: 1.31 ms
+  initHashMapKernel avg:      0.51 ms
+  populateHashMapKernel avg:  0.36 ms
+  countValidBucketsKernel avg: 0.35 ms
+  collectResultsKernel avg:   0.35 ms
+  DtoH Copy + Cleanup avg:    3.33 ms
+=== GPU Voxelization (Hash) === Block size: 16
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.82 ms
+  Allocation + HtoD Copy avg: 1.27 ms
+  initHashMapKernel avg:      0.50 ms
+  populateHashMapKernel avg:  0.32 ms
+  countValidBucketsKernel avg: 0.20 ms
+  collectResultsKernel avg:   0.31 ms
+  DtoH Copy + Cleanup avg:    3.37 ms
+=== GPU Voxelization (Hash) === Block size: 32
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.85 ms
+  Allocation + HtoD Copy avg: 1.28 ms
+  initHashMapKernel avg:      0.50 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.20 ms
+  collectResultsKernel avg:   0.32 ms
+  DtoH Copy + Cleanup avg:    3.33 ms
+=== GPU Voxelization (Hash) === Block size: 64
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.62 ms
+  Allocation + HtoD Copy avg: 1.26 ms
+  initHashMapKernel avg:      0.54 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.20 ms
+  collectResultsKernel avg:   0.32 ms
+  DtoH Copy + Cleanup avg:    3.33 ms
+=== GPU Voxelization (Hash) === Block size: 128
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.57 ms
+  Allocation + HtoD Copy avg: 1.25 ms
+  initHashMapKernel avg:      0.54 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.21 ms
+  collectResultsKernel avg:   0.32 ms
+  DtoH Copy + Cleanup avg:    3.32 ms
+=== GPU Voxelization (Hash) === Block size: 256
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.59 ms
+  Allocation + HtoD Copy avg: 1.27 ms
+  initHashMapKernel avg:      0.54 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.21 ms
+  collectResultsKernel avg:   0.32 ms
+  DtoH Copy + Cleanup avg:    3.32 ms
+=== GPU Voxelization (Hash) === Block size: 512
+voxelizeDynamicHashMap_timed overall average over 100 runs: 26.91 ms
+  Allocation + HtoD Copy avg: 1.45 ms
+  initHashMapKernel avg:      0.53 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.21 ms
+  collectResultsKernel avg:   0.33 ms
+  DtoH Copy + Cleanup avg:    3.43 ms
+=== GPU Voxelization (Hash) === Block size: 1024
+voxelizeDynamicHashMap_timed overall average over 100 runs: 27.71 ms
+  Allocation + HtoD Copy avg: 1.34 ms
+  initHashMapKernel avg:      0.55 ms
+  populateHashMapKernel avg:  0.34 ms
+  countValidBucketsKernel avg: 0.21 ms
+  collectResultsKernel avg:   0.32 ms
+  DtoH Copy + Cleanup avg:    3.90 ms
+=== GPU Voxelization (Hash) === Block size: 1
+voxelizeDynamicHashMap_timed overall average over 100 runs: 39.12 ms
+  Allocation + HtoD Copy avg: 1.30 ms
+  initHashMapKernel avg:      3.66 ms
+  populateHashMapKernel avg:  1.85 ms
+  countValidBucketsKernel avg: 3.63 ms
+  collectResultsKernel avg:   3.66 ms
+  DtoH Copy + Cleanup avg:    4.17 ms
+=== GPU Voxelization (Hash) === Block size: 2
+voxelizeDynamicHashMap_timed overall average over 100 runs: 33.34 ms
+  Allocation + HtoD Copy avg: 1.35 ms
+  initHashMapKernel avg:      1.83 ms
+  populateHashMapKernel avg:  0.99 ms
+  countValidBucketsKernel avg: 1.80 ms
+  collectResultsKernel avg:   1.80 ms
+  DtoH Copy + Cleanup avg:    4.23 ms
+=== GPU Voxelization (Hash) === Block size: 4
+voxelizeDynamicHashMap_timed overall average over 100 runs: 30.16 ms
+  Allocation + HtoD Copy avg: 1.33 ms
+  initHashMapKernel avg:      0.94 ms
+  populateHashMapKernel avg:  0.55 ms
+  countValidBucketsKernel avg: 0.92 ms
+  collectResultsKernel avg:   0.92 ms
+  DtoH Copy + Cleanup avg:    4.16 ms
+=== GPU Voxelization (Hash) === Block size: 8
+voxelizeDynamicHashMap_timed overall average over 100 runs: 28.52 ms
+  Allocation + HtoD Copy avg: 1.35 ms
+  initHashMapKernel avg:      0.68 ms
+  populateHashMapKernel avg:  0.35 ms
+  countValidBucketsKernel avg: 0.47 ms
+  collectResultsKernel avg:   0.46 ms
+  DtoH Copy + Cleanup avg:    4.13 ms
+=== GPU Voxelization (Hash) === Block size: 16
+voxelizeDynamicHashMap_timed overall average over 100 runs: 28.10 ms
+  Allocation + HtoD Copy avg: 1.29 ms
+  initHashMapKernel avg:      0.67 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.27 ms
+  collectResultsKernel avg:   0.41 ms
+  DtoH Copy + Cleanup avg:    4.16 ms
+=== GPU Voxelization (Hash) === Block size: 32
+voxelizeDynamicHashMap_timed overall average over 100 runs: 27.74 ms
+  Allocation + HtoD Copy avg: 1.26 ms
+  initHashMapKernel avg:      0.67 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.27 ms
+  collectResultsKernel avg:   0.41 ms
+  DtoH Copy + Cleanup avg:    4.16 ms
+=== GPU Voxelization (Hash) === Block size: 64
+voxelizeDynamicHashMap_timed overall average over 100 runs: 28.15 ms
+  Allocation + HtoD Copy avg: 1.31 ms
+  initHashMapKernel avg:      0.72 ms
+  populateHashMapKernel avg:  0.32 ms
+  countValidBucketsKernel avg: 0.27 ms
+  collectResultsKernel avg:   0.42 ms
+  DtoH Copy + Cleanup avg:    4.15 ms
+=== GPU Voxelization (Hash) === Block size: 128
+voxelizeDynamicHashMap_timed overall average over 100 runs: 28.21 ms
+  Allocation + HtoD Copy avg: 1.30 ms
+  initHashMapKernel avg:      0.71 ms
+  populateHashMapKernel avg:  0.32 ms
+  countValidBucketsKernel avg: 0.27 ms
+  collectResultsKernel avg:   0.42 ms
+  DtoH Copy + Cleanup avg:    4.16 ms
+=== GPU Voxelization (Hash) === Block size: 256
+voxelizeDynamicHashMap_timed overall average over 100 runs: 28.55 ms
+  Allocation + HtoD Copy avg: 1.35 ms
+  initHashMapKernel avg:      0.73 ms
+  populateHashMapKernel avg:  0.32 ms
+  countValidBucketsKernel avg: 0.27 ms
+  collectResultsKernel avg:   0.43 ms
+  DtoH Copy + Cleanup avg:    4.15 ms
+=== GPU Voxelization (Hash) === Block size: 512
+voxelizeDynamicHashMap_timed overall average over 100 runs: 27.76 ms
+  Allocation + HtoD Copy avg: 1.28 ms
+  initHashMapKernel avg:      0.71 ms
+  populateHashMapKernel avg:  0.31 ms
+  countValidBucketsKernel avg: 0.27 ms
+  collectResultsKernel avg:   0.42 ms
+  DtoH Copy + Cleanup avg:    4.14 ms
+=== GPU Voxelization (Hash) === Block size: 1024
+voxelizeDynamicHashMap_timed overall average over 100 runs: 28.01 ms
+  Allocation + HtoD Copy avg: 1.28 ms
+  initHashMapKernel avg:      0.71 ms
+  populateHashMapKernel avg:  0.30 ms
+  countValidBucketsKernel avg: 0.27 ms
+  collectResultsKernel avg:   0.43 ms
+  DtoH Copy + Cleanup avg:    4.17 ms

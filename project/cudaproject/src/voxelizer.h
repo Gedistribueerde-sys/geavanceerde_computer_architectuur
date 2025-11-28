@@ -28,3 +28,17 @@ std::vector<Point> voxerlizerMortonOnCPU(
     size_t totalPoints,
     float voxelSize
 );
+
+std::vector<Point> voxelizeDynamicHashMap(
+    const PointCloudVecs& hostPoints,
+    size_t totalPoints,
+    float voxelSize, 
+    uint32_t mapCapacityFactor, int blockSize)
+;
+
+std::vector<Point> voxelizeDynamicHashMap_timed(
+    const PointCloudVecs& hostPoints,
+    size_t totalPoints,
+    float voxelSize,
+    uint32_t mapCapacityFactor,
+    int runs , int blockSize) ;
