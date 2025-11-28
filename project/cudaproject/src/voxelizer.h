@@ -15,3 +15,9 @@ std::vector<Point> voxelizeUniformOnCPU(
     size_t totalPoints,
     float voxelSize
 );
+
+std::vector<Point> voxerlizerMortonOnCPU(
+    const PointCloudVecs& hostPoints,
+    size_t totalPoints,
+    float voxelSize
+);

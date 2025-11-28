@@ -249,3 +249,57 @@ std::vector<Point> voxelizeUniformOnCPU(
 
     return voxelizedPoints;
 }
+
+std::vector<Point> voxerlizerMortonOnCPU(
+    const PointCloudVecs& hostPoints,
+    size_t totalPoints,
+    float voxelSize)
+{
+    if (totalPoints == 0) {
+        return std::vector<Point>();
+    }
+
+    // Find bounds on CPU
+    float minX = *std::min_element(hostPoints.x.begin(), hostPoints.x.end());
+    float minY = *std::min_element(hostPoints.y.begin(), hostPoints.y.end());
+    float minZ = *std::min_element(hostPoints.z.begin(), hostPoints.z.end());
+    float invVoxelSize = 1.0f / voxelSize;
+
+    // Map to hold accumulators per Morton code
+    std::map<uint64_t, PointAccum> mortonMap;
+
+    for (size_t i = 0; i < totalPoints; i++) {
+        // Compute voxel indices
+        uint32_t ix = static_cast<uint32_t>(floor((hostPoints.x[i] - minX) * invVoxelSize));
+        uint32_t iy = static_cast<uint32_t>(floor((hostPoints.y[i] - minY) * invVoxelSize));
+        uint32_t iz = static_cast<uint32_t>(floor((hostPoints.z[i] - minZ) * invVoxelSize));
+
+        uint64_t mortonCode = mortonEncode(ix, iy, iz);
+
+        PointAccum& acc = mortonMap[mortonCode];
+        acc.sumX += hostPoints.x[i];
+        acc.sumY += hostPoints.y[i];
+        acc.sumZ += hostPoints.z[i];
+        acc.sumR += static_cast<uint32_t>(hostPoints.r[i]);
+        acc.sumG += static_cast<uint32_t>(hostPoints.g[i]);
+        acc.sumB += static_cast<uint32_t>(hostPoints.b[i]);
+        acc.count++;
+    }
+
+    // Convert accumulators to final points
+    std::vector<Point> result;
+    result.reserve(mortonMap.size());
+
+    for (const auto& [mortonCode, acc] : mortonMap) {
+        Point p;
+        float c = static_cast<float>(acc.count);
+        p.x = acc.sumX / c;
+        p.y = acc.sumY / c;
+        p.z = acc.sumZ / c;
+        p.r = static_cast<uint8_t>(acc.sumR / acc.count);
+        p.g = static_cast<uint8_t>(acc.sumG / acc.count);
+        p.b = static_cast<uint8_t>(acc.sumB / acc.count);
+        result.push_back(p);
+    }
+    return result;
+}

@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     // CPU Voxelization
     std::cout << "=== CPU Voxelization ===" << std::endl;
     auto cpuStart = std::chrono::high_resolution_clock::now();
-    std::vector<Point> voxelizedCPU = voxelizeUniformOnCPU(pcVecs, totalPoints, voxelSize);
+    std::vector<Point> voxelizedCPU = voxerlizerMortonOnCPU(pcVecs, totalPoints, voxelSize);
     auto cpuEnd = std::chrono::high_resolution_clock::now();
     double cpuTimeMs = std::chrono::duration<double, std::milli>(cpuEnd - cpuStart).count();
     std::cout << "CPU voxels: " << voxelizedCPU.size() << std::endl;
