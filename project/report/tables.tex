@@ -1,0 +1,513 @@
+\documentclass[a4paper,10pt]{article}
+
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage[colorlinks, linkcolor=black, citecolor=black, urlcolor=black]{hyperref}
+\usepackage{geometry}
+\geometry{tmargin=3cm, bmargin=2.2cm, lmargin=2.2cm, rmargin=2cm}
+\usepackage{todonotes} %Used for the figure placeholders
+\usepackage{ifthen}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{xcolor} % good practice to load this explicitly before using \color
+\usepackage{url} % of \usepackage{hyperref}
+\begin{document}
+
+
+% Voxel Size 0.25 - Morton Method
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Morton) - Voxel Size 0.25}
+\scalebox{0.85}{
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Morton Codes (ms)} & \textbf{Sort (ms)} & \textbf{Point Accum (ms)} & \textbf{Reduce (ms)} & \textbf{Copy (ms)} \\
+\hline
+1 & 40.46 & 1.07 & 0.92 & 1.08 & 0.25 & 1.05 \\
+2 & 37.66 & 0.54 & 0.90 & 0.54 & 0.25 & 1.01 \\
+4 & 37.03 & 0.27 & 0.91 & 0.31 & 0.25 & 1.02 \\
+8 & 38.39 & 0.14 & 0.92 & 0.27 & 0.26 & 1.07 \\
+16 & 38.29 & 0.07 & 0.92 & 0.27 & 0.25 & 1.05 \\
+32 & 39.39 & 0.04 & 0.95 & 0.26 & 0.25 & 1.08 \\
+64 & 39.30 & 0.04 & 0.99 & 0.26 & 0.25 & 1.10 \\
+128 & 37.19 & 0.04 & 0.90 & 0.26 & 0.25 & 1.03 \\
+256 & 36.61 & 0.04 & 0.89 & 0.26 & 0.25 & 1.01 \\
+512 & 36.91 & 0.04 & 0.90 & 0.27 & 0.25 & 1.02 \\
+1024 & 39.67 & 0.04 & 0.94 & 0.27 & 0.25 & 1.07 \\
+\hline
+\end{tabular}}
+\end{table}
+
+% Voxel Size 0.25 - Hash Method (Capacity Factor 2)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 2) - Voxel Size 0.25}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 35.25 & 1.36 & 2.15 & 2.46 & 2.12 & 2.12 & 3.97 \\
+2 & 31.23 & 1.32 & 1.09 & 1.63 & 1.07 & 1.07 & 4.00 \\
+4 & 29.25 & 1.34 & 0.57 & 1.16 & 0.56 & 0.57 & 4.05 \\
+8 & 27.97 & 1.30 & 0.33 & 0.90 & 0.28 & 0.28 & 3.98 \\
+16 & 27.70 & 1.30 & 0.33 & 0.83 & 0.14 & 0.26 & 3.97 \\
+32 & 28.05 & 1.37 & 0.34 & 0.97 & 0.14 & 0.26 & 4.06 \\
+64 & 28.88 & 1.34 & 0.36 & 1.48 & 0.14 & 0.27 & 3.99 \\
+128 & 28.45 & 1.33 & 0.35 & 1.53 & 0.14 & 0.27 & 3.97 \\
+256 & 28.39 & 1.28 & 0.35 & 1.46 & 0.14 & 0.26 & 3.97 \\
+512 & 28.37 & 1.29 & 0.33 & 1.45 & 0.13 & 0.26 & 4.02 \\
+1024 & 29.96 & 1.39 & 0.39 & 1.47 & 0.16 & 0.30 & 4.06 \\
+\hline
+\end{tabular}}
+\end{table}
+
+% Voxel Size 0.25 - Hash Method (Capacity Factor 3)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 3) - Voxel Size 0.25}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 37.48 & 1.40 & 2.79 & 2.15 & 2.79 & 2.76 & 4.45 \\
+2 & 32.27 & 1.31 & 1.37 & 1.35 & 1.35 & 1.34 & 4.44 \\
+4 & 29.75 & 1.31 & 0.70 & 0.93 & 0.69 & 0.69 & 4.38 \\
+8 & 29.11 & 1.36 & 0.48 & 0.76 & 0.35 & 0.36 & 4.48 \\
+16 & 29.76 & 1.40 & 0.52 & 0.75 & 0.20 & 0.36 & 4.46 \\
+32 & 29.73 & 1.38 & 0.49 & 0.97 & 0.20 & 0.34 & 4.46 \\
+64 & 30.15 & 1.32 & 0.50 & 1.62 & 0.19 & 0.35 & 4.81 \\
+128 & 30.22 & 1.31 & 0.51 & 1.70 & 0.19 & 0.35 & 4.95 \\
+256 & 29.57 & 1.27 & 0.51 & 1.64 & 0.19 & 0.35 & 4.93 \\
+512 & 29.64 & 1.28 & 0.50 & 1.62 & 0.20 & 0.35 & 4.92 \\
+1024 & 29.64 & 1.28 & 0.50 & 1.59 & 0.19 & 0.35 & 5.01 \\
+\hline
+\end{tabular}}
+\end{table}
+
+% Voxel Size 0.25 - Hash Method (Capacity Factor 4)
+\begin{table}[H]
+\centering
+
+\caption{GPU Voxelization (Hash, Capacity Factor 4) - Voxel Size 0.25}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 41.82 & 1.37 & 3.71 & 2.10 & 3.68 & 3.67 & 5.35 \\
+2 & 34.40 & 1.34 & 1.84 & 1.30 & 1.83 & 1.83 & 5.19 \\
+4 & 30.72 & 1.27 & 0.91 & 0.85 & 0.90 & 0.90 & 5.17 \\
+8 & 29.27 & 1.28 & 0.62 & 0.68 & 0.46 & 0.46 & 5.16 \\
+16 & 29.10 & 1.26 & 0.62 & 0.72 & 0.25 & 0.42 & 5.16 \\
+32 & 29.38 & 1.27 & 0.61 & 0.99 & 0.25 & 0.44 & 5.22 \\
+64 & 30.12 & 1.25 & 0.66 & 1.75 & 0.25 & 0.44 & 5.16 \\
+128 & 30.22 & 1.27 & 0.65 & 1.82 & 0.25 & 0.43 & 5.18 \\
+256 & 30.25 & 1.31 & 0.66 & 1.75 & 0.25 & 0.44 & 5.16 \\
+512 & 30.65 & 1.39 & 0.67 & 1.79 & 0.25 & 0.45 & 5.20 \\
+1024 & 31.30 & 1.35 & 0.67 & 1.78 & 0.27 & 0.46 & 5.26 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 0.5 - Morton Method
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Morton) - Voxel Size 0.5}
+\scalebox{0.85}{
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Morton Codes (ms)} & \textbf{Sort (ms)} & \textbf{Point Accum (ms)} & \textbf{Reduce (ms)} & \textbf{Copy (ms)} \\
+\hline
+1 & 30.97 & 1.07 & 0.92 & 1.08 & 0.19 & 0.46 \\
+2 & 29.85 & 0.54 & 0.92 & 0.54 & 0.19 & 0.46 \\
+4 & 29.34 & 0.27 & 0.92 & 0.30 & 0.19 & 0.46 \\
+8 & 30.59 & 0.14 & 0.94 & 0.27 & 0.19 & 0.49 \\
+16 & 30.53 & 0.07 & 0.95 & 0.26 & 0.20 & 0.48 \\
+32 & 30.60 & 0.04 & 0.96 & 0.26 & 0.19 & 0.49 \\
+64 & 30.52 & 0.04 & 0.96 & 0.26 & 0.19 & 0.49 \\
+128 & 29.96 & 0.04 & 0.96 & 0.26 & 0.19 & 0.48 \\
+256 & 31.18 & 0.04 & 1.02 & 0.26 & 0.19 & 0.49 \\
+512 & 29.32 & 0.04 & 0.93 & 0.26 & 0.19 & 0.47 \\
+1024 & 29.14 & 0.04 & 0.93 & 0.26 & 0.19 & 0.47 \\
+\hline
+\end{tabular}}
+\end{table}
+
+% Voxel Size 0.5 - Hash Method (Capacity Factor 2)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 2) - Voxel Size 0.5}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 33.87 & 1.28 & 2.18 & 2.15 & 2.17 & 2.16 & 3.30 \\
+2 & 29.53 & 1.28 & 1.09 & 1.21 & 1.08 & 1.08 & 3.19 \\
+4 & 27.40 & 1.25 & 0.55 & 0.73 & 0.54 & 0.55 & 3.19 \\
+8 & 26.45 & 1.26 & 0.34 & 0.50 & 0.28 & 0.28 & 3.20 \\
+16 & 26.20 & 1.26 & 0.33 & 0.43 & 0.15 & 0.22 & 3.22 \\
+32 & 26.22 & 1.26 & 0.34 & 0.44 & 0.14 & 0.23 & 3.23 \\
+64 & 26.42 & 1.35 & 0.36 & 0.50 & 0.14 & 0.23 & 3.19 \\
+128 & 26.30 & 1.28 & 0.36 & 0.50 & 0.14 & 0.23 & 3.19 \\
+256 & 26.37 & 1.35 & 0.36 & 0.49 & 0.14 & 0.24 & 3.19 \\
+512 & 26.37 & 1.29 & 0.36 & 0.48 & 0.14 & 0.24 & 3.19 \\
+1024 & 26.30 & 1.27 & 0.36 & 0.48 & 0.14 & 0.24 & 3.21 \\
+\hline
+\end{tabular}}
+\end{table}
+
+% Voxel Size 0.5 - Hash Method (Capacity Factor 3)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 3) - Voxel Size 0.5}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 35.53 & 1.26 & 2.74 & 1.88 & 2.71 & 2.72 & 3.64 \\
+2 & 30.68 & 1.29 & 1.38 & 1.06 & 1.36 & 1.36 & 3.64 \\
+4 & 30.11 & 1.39 & 0.82 & 0.72 & 0.81 & 0.80 & 3.99 \\
+8 & 28.30 & 1.33 & 0.52 & 0.47 & 0.40 & 0.40 & 4.01 \\
+16 & 28.30 & 1.33 & 0.52 & 0.42 & 0.21 & 0.33 & 4.20 \\
+32 & 28.32 & 1.33 & 0.52 & 0.44 & 0.22 & 0.34 & 4.17 \\
+64 & 28.40 & 1.38 & 0.57 & 0.50 & 0.22 & 0.36 & 4.17 \\
+128 & 28.93 & 1.39 & 0.56 & 0.49 & 0.21 & 0.34 & 4.19 \\
+256 & 28.89 & 1.37 & 0.56 & 0.49 & 0.21 & 0.34 & 4.21 \\
+512 & 29.67 & 1.45 & 0.56 & 0.48 & 0.21 & 0.35 & 4.25 \\
+1024 & 29.80 & 1.47 & 0.59 & 0.50 & 0.23 & 0.38 & 4.25 \\
+\hline
+\end{tabular}}
+\end{table}
+
+% Voxel Size 0.5 - Hash Method (Capacity Factor 4)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 4) - Voxel Size 0.5}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 40.00 & 1.37 & 3.67 & 1.92 & 3.64 & 3.65 & 4.51 \\
+2 & 35.01 & 1.42 & 1.85 & 1.10 & 1.82 & 1.83 & 4.49 \\
+4 & 31.66 & 1.43 & 0.97 & 0.66 & 0.95 & 0.97 & 4.46 \\
+8 & 30.72 & 1.41 & 0.71 & 0.46 & 0.49 & 0.50 & 4.46 \\
+16 & 28.64 & 1.36 & 0.68 & 0.39 & 0.27 & 0.42 & 4.43 \\
+32 & 28.57 & 1.33 & 0.67 & 0.40 & 0.27 & 0.44 & 4.43 \\
+64 & 28.82 & 1.35 & 0.73 & 0.47 & 0.28 & 0.44 & 4.44 \\
+128 & 28.87 & 1.34 & 0.73 & 0.48 & 0.27 & 0.43 & 4.50 \\
+256 & 29.52 & 1.41 & 0.73 & 0.51 & 0.27 & 0.44 & 5.11 \\
+512 & 29.19 & 1.34 & 0.71 & 0.48 & 0.28 & 0.44 & 5.11 \\
+1024 & 29.00 & 1.35 & 0.70 & 0.47 & 0.27 & 0.44 & 5.10 \\
+\hline
+\end{tabular}}
+\end{table}
+
+
+% Voxel Size 0.75 - Morton Method
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Morton) - Voxel Size 0.75}
+\scalebox{0.85}{
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Morton Codes (ms)} & \textbf{Sort (ms)} & \textbf{Point Accum (ms)} & \textbf{Reduce (ms)} & \textbf{Copy (ms)} \\
+\hline
+1 & 28.62 & 1.07 & 0.92 & 1.08 & 0.17 & 0.28 \\
+2 & 28.12 & 0.54 & 0.93 & 0.54 & 0.17 & 0.29 \\
+4 & 27.22 & 0.27 & 0.92 & 0.29 & 0.17 & 0.28 \\
+8 & 27.47 & 0.14 & 0.93 & 0.26 & 0.18 & 0.29 \\
+16 & 27.19 & 0.07 & 0.95 & 0.26 & 0.18 & 0.29 \\
+32 & 28.33 & 0.04 & 0.96 & 0.26 & 0.18 & 0.30 \\
+64 & 27.56 & 0.04 & 0.93 & 0.26 & 0.18 & 0.29 \\
+128 & 27.22 & 0.04 & 0.93 & 0.26 & 0.17 & 0.29 \\
+256 & 27.11 & 0.04 & 0.94 & 0.26 & 0.17 & 0.29 \\
+512 & 28.12 & 0.04 & 0.93 & 0.26 & 0.17 & 0.29 \\
+1024 & 27.96 & 0.04 & 0.96 & 0.26 & 0.18 & 0.29 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 0.75 - Hash Method (Capacity Factor 2)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 2) - Voxel Size 0.75}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 33.80 & 1.35 & 2.00 & 1.94 & 2.01 & 1.99 & 2.79 \\
+2 & 29.90 & 1.37 & 1.01 & 1.03 & 0.99 & 0.98 & 2.76 \\
+4 & 27.63 & 1.33 & 0.51 & 0.60 & 0.50 & 0.50 & 2.74 \\
+8 & 26.24 & 1.33 & 0.35 & 0.37 & 0.26 & 0.26 & 2.72 \\
+16 & 26.41 & 1.36 & 0.35 & 0.34 & 0.14 & 0.21 & 2.88 \\
+32 & 25.89 & 1.27 & 0.35 & 0.34 & 0.14 & 0.22 & 2.93 \\
+64 & 26.03 & 1.27 & 0.36 & 0.35 & 0.14 & 0.22 & 2.92 \\
+128 & 26.05 & 1.30 & 0.37 & 0.35 & 0.14 & 0.23 & 2.92 \\
+256 & 26.51 & 1.35 & 0.37 & 0.34 & 0.14 & 0.22 & 2.93 \\
+512 & 26.62 & 1.41 & 0.38 & 0.35 & 0.14 & 0.22 & 2.93 \\
+1024 & 25.95 & 1.26 & 0.36 & 0.33 & 0.14 & 0.22 & 2.98 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 0.75 - Hash Method (Capacity Factor 3)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 3) - Voxel Size 0.75}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 36.09 & 1.32 & 2.81 & 1.86 & 2.77 & 2.78 & 3.55 \\
+2 & 30.35 & 1.35 & 1.37 & 0.98 & 1.34 & 1.34 & 3.32 \\
+4 & 27.99 & 1.30 & 0.70 & 0.55 & 0.68 & 0.68 & 3.33 \\
+8 & 27.38 & 1.31 & 0.51 & 0.36 & 0.35 & 0.35 & 3.33 \\
+16 & 26.82 & 1.27 & 0.50 & 0.32 & 0.20 & 0.31 & 3.37 \\
+32 & 26.85 & 1.28 & 0.50 & 0.31 & 0.20 & 0.32 & 3.33 \\
+64 & 26.62 & 1.26 & 0.54 & 0.31 & 0.20 & 0.32 & 3.33 \\
+128 & 26.57 & 1.25 & 0.54 & 0.31 & 0.21 & 0.32 & 3.32 \\
+256 & 26.59 & 1.27 & 0.54 & 0.31 & 0.21 & 0.32 & 3.32 \\
+512 & 26.91 & 1.45 & 0.53 & 0.31 & 0.21 & 0.33 & 3.43 \\
+1024 & 27.71 & 1.34 & 0.55 & 0.34 & 0.21 & 0.32 & 3.90 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 0.75 - Hash Method (Capacity Factor 4)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 4) - Voxel Size 0.75}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 39.12 & 1.30 & 3.66 & 1.85 & 3.63 & 3.66 & 4.17 \\
+2 & 33.34 & 1.35 & 1.83 & 0.99 & 1.80 & 1.80 & 4.23 \\
+4 & 30.16 & 1.33 & 0.94 & 0.55 & 0.92 & 0.92 & 4.16 \\
+8 & 28.52 & 1.35 & 0.68 & 0.35 & 0.47 & 0.46 & 4.13 \\
+16 & 28.10 & 1.29 & 0.67 & 0.31 & 0.27 & 0.41 & 4.16 \\
+32 & 27.74 & 1.26 & 0.67 & 0.31 & 0.27 & 0.41 & 4.16 \\
+64 & 28.15 & 1.31 & 0.72 & 0.32 & 0.27 & 0.42 & 4.15 \\
+128 & 28.21 & 1.30 & 0.71 & 0.32 & 0.27 & 0.42 & 4.16 \\
+256 & 28.55 & 1.35 & 0.73 & 0.32 & 0.27 & 0.43 & 4.15 \\
+512 & 27.76 & 1.28 & 0.71 & 0.31 & 0.27 & 0.42 & 4.14 \\
+1024 & 28.01 & 1.28 & 0.71 & 0.30 & 0.27 & 0.43 & 4.17 \\
+\hline
+\end{tabular}
+}
+\end{table}
+% Voxel Size 1.0 - Morton Method
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Morton) - Voxel Size 1.0}
+\scalebox{0.85}{
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Morton Codes (ms)} & \textbf{Sort (ms)} & \textbf{Point Accum (ms)} & \textbf{Reduce (ms)} & \textbf{Copy (ms)} \\
+\hline
+1 & 27.63 & 1.07 & 0.92 & 1.08 & 0.17 & 0.20 \\
+2 & 26.55 & 0.54 & 0.99 & 0.54 & 0.17 & 0.20 \\
+4 & 25.99 & 0.27 & 0.92 & 0.28 & 0.17 & 0.20 \\
+8 & 25.81 & 0.14 & 0.92 & 0.25 & 0.17 & 0.20 \\
+16 & 25.93 & 0.07 & 0.95 & 0.26 & 0.17 & 0.20 \\
+32 & 25.71 & 0.04 & 0.92 & 0.26 & 0.17 & 0.20 \\
+64 & 25.73 & 0.04 & 0.92 & 0.26 & 0.17 & 0.20 \\
+128 & 25.71 & 0.04 & 0.92 & 0.26 & 0.17 & 0.20 \\
+256 & 25.81 & 0.04 & 0.92 & 0.26 & 0.17 & 0.20 \\
+512 & 25.73 & 0.04 & 0.92 & 0.26 & 0.17 & 0.20 \\
+1024 & 25.74 & 0.04 & 0.92 & 0.26 & 0.17 & 0.20 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 1.0 - Hash Method (Capacity Factor 2)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 2) - Voxel Size 1.0}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 33.36 & 1.33 & 2.20 & 2.07 & 2.16 & 2.16 & 2.79 \\
+2 & 29.15 & 1.26 & 1.10 & 1.12 & 1.09 & 1.09 & 2.79 \\
+4 & 26.97 & 1.27 & 0.56 & 0.62 & 0.55 & 0.55 & 2.84 \\
+8 & 25.97 & 1.25 & 0.34 & 0.42 & 0.28 & 0.28 & 2.83 \\
+16 & 25.69 & 1.26 & 0.34 & 0.37 & 0.14 & 0.21 & 2.78 \\
+32 & 25.67 & 1.26 & 0.34 & 0.36 & 0.14 & 0.21 & 2.78 \\
+64 & 25.75 & 1.26 & 0.36 & 0.35 & 0.14 & 0.22 & 2.79 \\
+128 & 25.70 & 1.27 & 0.36 & 0.35 & 0.14 & 0.22 & 2.79 \\
+256 & 25.79 & 1.28 & 0.36 & 0.36 & 0.14 & 0.22 & 2.84 \\
+512 & 25.72 & 1.28 & 0.36 & 0.35 & 0.14 & 0.22 & 2.79 \\
+1024 & 25.79 & 1.25 & 0.35 & 0.34 & 0.14 & 0.22 & 2.85 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 1.0 - Hash Method (Capacity Factor 3)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 3) - Voxel Size 1.0}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 35.26 & 1.30 & 2.77 & 1.84 & 2.74 & 2.75 & 3.26 \\
+2 & 30.20 & 1.26 & 1.39 & 0.99 & 1.36 & 1.37 & 3.25 \\
+4 & 28.57 & 1.28 & 0.80 & 0.61 & 0.79 & 0.79 & 3.71 \\
+8 & 27.38 & 1.29 & 0.50 & 0.42 & 0.41 & 0.41 & 3.78 \\
+16 & 27.03 & 1.27 & 0.50 & 0.37 & 0.21 & 0.31 & 3.75 \\
+32 & 27.09 & 1.33 & 0.50 & 0.37 & 0.21 & 0.31 & 3.76 \\
+64 & 27.05 & 1.26 & 0.53 & 0.35 & 0.20 & 0.31 & 3.75 \\
+128 & 27.04 & 1.28 & 0.54 & 0.36 & 0.21 & 0.31 & 3.75 \\
+256 & 27.03 & 1.26 & 0.54 & 0.35 & 0.21 & 0.32 & 3.75 \\
+512 & 26.99 & 1.26 & 0.53 & 0.35 & 0.21 & 0.32 & 3.75 \\
+1024 & 27.01 & 1.26 & 0.52 & 0.34 & 0.20 & 0.32 & 3.75 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 1.0 - Hash Method (Capacity Factor 4)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 4) - Voxel Size 1.0}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 38.53 & 1.33 & 3.62 & 1.81 & 3.57 & 3.57 & 4.02 \\
+2 & 32.17 & 1.25 & 1.80 & 0.98 & 1.78 & 1.78 & 4.01 \\
+4 & 29.10 & 1.25 & 0.91 & 0.55 & 0.89 & 0.90 & 3.99 \\
+8 & 27.77 & 1.27 & 0.66 & 0.36 & 0.45 & 0.45 & 4.00 \\
+16 & 27.46 & 1.25 & 0.66 & 0.32 & 0.27 & 0.40 & 3.99 \\
+32 & 27.49 & 1.26 & 0.66 & 0.32 & 0.27 & 0.40 & 3.99 \\
+64 & 29.44 & 1.40 & 0.76 & 0.33 & 0.30 & 0.44 & 4.05 \\
+128 & 29.27 & 1.39 & 0.77 & 0.32 & 0.29 & 0.43 & 4.08 \\
+256 & 28.07 & 1.26 & 0.71 & 0.34 & 0.27 & 0.41 & 4.48 \\
+512 & 28.52 & 1.31 & 0.71 & 0.35 & 0.28 & 0.41 & 4.69 \\
+1024 & 29.59 & 1.44 & 0.74 & 0.35 & 0.28 & 0.43 & 4.77 \\
+\hline
+\end{tabular}
+}
+\end{table}
+% Voxel Size 1.25 - Morton Method
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Morton) - Voxel Size 1.25}
+\scalebox{0.85}{
+\begin{tabular}{|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Morton Codes (ms)} & \textbf{Sort (ms)} & \textbf{Point Accum (ms)} & \textbf{Reduce (ms)} & \textbf{Copy (ms)} \\
+\hline
+1 & 27.15 & 1.07 & 0.92 & 1.07 & 0.16 & 0.15 \\
+2 & 25.98 & 0.54 & 0.94 & 0.54 & 0.16 & 0.15 \\
+4 & 25.45 & 0.27 & 0.92 & 0.28 & 0.16 & 0.15 \\
+8 & 25.27 & 0.14 & 0.92 & 0.24 & 0.16 & 0.15 \\
+16 & 25.24 & 0.07 & 0.93 & 0.25 & 0.17 & 0.15 \\
+32 & 25.30 & 0.04 & 0.92 & 0.25 & 0.16 & 0.15 \\
+64 & 25.18 & 0.04 & 0.92 & 0.25 & 0.17 & 0.15 \\
+128 & 28.64 & 0.04 & 0.98 & 0.26 & 0.17 & 0.16 \\
+256 & 27.27 & 0.04 & 0.94 & 0.26 & 0.17 & 0.15 \\
+512 & 26.28 & 0.04 & 0.95 & 0.26 & 0.17 & 0.15 \\
+1024 & 25.29 & 0.04 & 0.92 & 0.26 & 0.17 & 0.15 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 1.25 - Hash Method (Capacity Factor 2)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 2) - Voxel Size 1.25}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 34.41 & 1.47 & 1.98 & 2.07 & 1.96 & 2.04 & 2.41 \\
+2 & 29.03 & 1.35 & 0.95 & 1.02 & 0.92 & 0.93 & 2.38 \\
+4 & 26.71 & 1.27 & 0.52 & 0.62 & 0.51 & 0.50 & 2.57 \\
+8 & 26.44 & 1.35 & 0.36 & 0.49 & 0.28 & 0.28 & 2.71 \\
+16 & 27.74 & 1.35 & 0.40 & 0.49 & 0.15 & 0.22 & 2.74 \\
+32 & 25.85 & 1.27 & 0.35 & 0.45 & 0.14 & 0.21 & 2.74 \\
+64 & 26.68 & 1.37 & 0.37 & 0.44 & 0.14 & 0.22 & 2.73 \\
+128 & 26.09 & 1.31 & 0.37 & 0.44 & 0.14 & 0.21 & 2.71 \\
+256 & 26.82 & 1.37 & 0.39 & 0.45 & 0.15 & 0.22 & 2.80 \\
+512 & 27.34 & 1.40 & 0.38 & 0.44 & 0.15 & 0.22 & 2.78 \\
+1024 & 26.88 & 1.40 & 0.38 & 0.43 & 0.14 & 0.22 & 2.74 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 1.25 - Hash Method (Capacity Factor 3)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 3) - Voxel Size 1.25}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 36.85 & 1.40 & 2.81 & 1.88 & 2.78 & 2.78 & 3.26 \\
+2 & 30.59 & 1.32 & 1.36 & 1.01 & 1.36 & 1.35 & 3.12 \\
+4 & 28.87 & 1.42 & 0.71 & 0.59 & 0.69 & 0.69 & 3.13 \\
+8 & 27.36 & 1.37 & 0.52 & 0.43 & 0.36 & 0.35 & 3.14 \\
+16 & 28.39 & 1.42 & 0.53 & 0.41 & 0.23 & 0.32 & 3.14 \\
+32 & 28.20 & 1.38 & 0.54 & 0.40 & 0.22 & 0.32 & 3.15 \\
+64 & 27.49 & 1.39 & 0.57 & 0.38 & 0.21 & 0.31 & 3.16 \\
+128 & 27.24 & 1.40 & 0.55 & 0.40 & 0.21 & 0.32 & 3.34 \\
+256 & 28.52 & 1.45 & 0.60 & 0.46 & 0.23 & 0.33 & 3.71 \\
+512 & 29.02 & 1.51 & 0.62 & 0.48 & 0.25 & 0.37 & 3.71 \\
+1024 & 27.55 & 1.30 & 0.53 & 0.42 & 0.21 & 0.31 & 3.67 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+% Voxel Size 1.25 - Hash Method (Capacity Factor 4)
+\begin{table}[H]
+\centering
+\caption{GPU Voxelization (Hash, Capacity Factor 4) - Voxel Size 1.25}
+\scalebox{0.75}{
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Block Size} & \textbf{Overall (ms)} & \textbf{Alloc+HtoD (ms)} & \textbf{Init (ms)} & \textbf{Populate (ms)} & \textbf{Count (ms)} & \textbf{Collect (ms)} & \textbf{DtoH+Cleanup (ms)} \\
+\hline
+1 & 39.06 & 1.32 & 3.67 & 1.85 & 3.64 & 3.62 & 3.97 \\
+2 & 33.07 & 1.32 & 1.81 & 1.01 & 1.79 & 1.81 & 3.94 \\
+4 & 30.97 & 1.40 & 0.94 & 0.58 & 0.92 & 0.93 & 3.96 \\
+8 & 28.41 & 1.33 & 0.68 & 0.42 & 0.46 & 0.46 & 3.92 \\
+16 & 30.53 & 1.51 & 0.73 & 0.43 & 0.31 & 0.43 & 3.99 \\
+32 & 29.31 & 1.40 & 0.70 & 0.40 & 0.29 & 0.43 & 3.97 \\
+64 & 29.53 & 1.39 & 0.75 & 0.40 & 0.29 & 0.45 & 4.04 \\
+128 & 31.55 & 1.52 & 0.82 & 0.40 & 0.29 & 0.44 & 4.08 \\
+256 & 28.96 & 1.38 & 0.72 & 0.37 & 0.28 & 0.41 & 3.95 \\
+512 & 29.78 & 1.43 & 0.78 & 0.38 & 0.29 & 0.43 & 3.97 \\
+1024 & 28.28 & 1.31 & 0.70 & 0.36 & 0.27 & 0.41 & 3.95 \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+\end{document}
