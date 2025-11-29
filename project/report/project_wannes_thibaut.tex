@@ -70,8 +70,17 @@ This report talks about the implementation of a point cloud to voxel grid filter
 \section{Visualisation}
 Everything was visualised using the python open3d library. This library allows for easy loading and displaying of point clouds. The original point cloud and the voxelized point cloud were displayed side by side for comparison.
 \textbf{TODOOOO : paste figures}
-\section{Possible Improvements}
-The main problem is that both implementations work with a fixed voxel size. This means that if the point cloud is very large but sparse, a lot of memory is wasted on empty space in the hash map implementation. A possible improvement would be to implement an octree structure, which would allow for variable voxel sizes depending on the density of points in a given area.
+\section{Conclusion and Future Work}
 
+This study confirms that GPU-based voxelization offers a significant performance advantage over CPU-based implementations, achieving speedups between 9.5$\times$ and 15.5$\times$. While both the Morton-code and Hash-table approaches effectively parallelize the workload, their performance characteristics differ: the Hash method (Capacity Factor 2) excels at handling high-resolution grids (small voxels) due to lower overhead, whereas the Morton method provides stability and efficiency for lower-resolution grids (large voxels) via spatial coherence.
+
+Despite these gains, two primary limitations remain:
+\begin{enumerate}
+    \item \textbf{Data Transfer Bottleneck:} A substantial portion of the runtime is consumed by transferring data between host (CPU) and device (GPU). Reducing the volume of data transmission remains a key area for optimization.
+    \item \textbf{Memory Inefficiency:} Both implementations rely on a fixed voxel size. For large, sparse point clouds, the hash-table approach allocates memory for a global grid regardless of local point density, leading to wasted VRAM on empty space.
+\end{enumerate}
+
+\paragraph{Future Improvements}
+To address these issues, future work should focus on implementing an Octree data structure. Unlike fixed grids, an octree allows for variable voxel sizes, dynamically adapting resolution based on local point density. This would significantly reduce memory usage in sparse regions and potentially minimize the data transfer footprint, addressing the two main bottlenecks identified in this analysis.
 \input{bibliography}
 \end{document}

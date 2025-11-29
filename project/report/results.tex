@@ -1,110 +1,23 @@
 \section{Results and Analysis}
-\subsection{Timing remarks and methodology}
-All the following results were obtained on relatively old hardware: a NVIDIA Geforce GTX 1080ti with 11GB of GDDR5X memory, paired with an Intel Core i7-8700K CPU @ 4.8 GHz and 32GB of DDR4 RAM and the pc runs ubuntu 24.04.3 LTS. The point cloud used for testing contains 648433 points, representing a dense scan of an urban environment.
-\subsection{General Observations}
-The voxelizers are compared among five voxel sizes (0.25, 0.5, 0.75, 1.0, 1.25). For each voxel size, eight block sizes were tested (1, 2, 4, 8, 16, 32, 64, 256, 512, 1024 threads per block). The hash-table voxelizer was evaluated with three different capacity factors (2, 3, and 4 times the number of input points). The performance metrics recorded include total execution time and a breakdown of time spent in key phases of each algorithm.
-Every configuration was run 100 times to obtain an average execution time, minimizing the impact of transient system load variations.
 
-\subsection{Performance Analysis per Method}
+\subsection{Methodology and Experimental Setup}
+All results were obtained on an NVIDIA GeForce GTX 1080 Ti (11GB GDDR5X) paired with an Intel Core i7-8700K CPU @ 4.8 GHz and 32GB DDR4 RAM, running Ubuntu 24.04.3 LTS. The test dataset consists of a dense point cloud scan of an urban environment containing 648,433 points.
 
-\subsubsection{Morton-Code Voxelizer}
-The Morton-based approach demonstrates consistent and predictable performance. Key findings include:
-
+To ensure robust results, the voxelizers were evaluated across a wide parameter space:
 \begin{itemize}
-    \item \textbf{Optimal block size:} 4--256 threads per block.
-    \item \textbf{Total execution time:} Ranging from 25.18\,ms (voxel size 1.25, block size 64) to 40.46\,ms (voxel size 0.25, block size 1).
-    \item \textbf{Primary bottleneck:} The sorting stage dominates runtime, requiring approximately 0.90--1.02\,ms, nearly constant across all tests.
+    \item \textbf{Voxel Sizes:} 0.25, 0.5, 0.75, 1.0, 1.25.
+    \item \textbf{Block Sizes:} 1, 2, 4, 8, 16, 32, 64, 256, 512, 1024 threads per block.
+    \item \textbf{Hash-Table Capacity Factors:} 2, 3, and 4 times the input point count.
 \end{itemize}
+Every configuration was executed 100 times to obtain average execution times and minimize transient system load variations.
 
-Very small block sizes (1--4 threads) significantly slow down Morton-code generation (0.27--1.07\,ms), while larger block sizes stabilize this step to around 0.04\,ms.
+\subsection{Overall Performance: CPU vs. GPU}
+The transition to GPU-based voxelization yields substantial performance improvements. As shown in Tables \ref{tab:cpu_min} and \ref{tab:cpu_max}, the GPU implementations achieve speedup factors ranging from \textbf{9.5$\times$ to 15.5$\times$} compared to the CPU.
 
-\subsubsection{Hash-Table Voxelizer}
-The hash-based method demonstrates greater variability, largely influenced by the selected capacity factor of the hash table.
+The most significant gains occur at smaller voxel sizes (e.g., 0.25), where the massive parallelism of the GPU is fully exploited. Even in worst-case GPU scenarios, the speedup remains between 6.1$\times$ and 12.2$\times$.
 
-\paragraph{Capacity Factor 2 (highest efficiency)}
-\begin{itemize}
-    \item \textbf{Best overall performance:} 25.67\,ms (voxel size 1.0, block size 32).
-    \item \textbf{Optimal block sizes:} 8--32 threads per block.
-    \item \textbf{Advantages:} Lowest memory overhead and fastest device-to-host transfer times.
-\end{itemize}
-
-\paragraph{Capacity Factor 3 (balanced)}
-\begin{itemize}
-    \item Execution times are \textbf{2--4\,ms slower} compared to capacity factor 2.
-    \item Reduced collisions during accumulation, at the cost of increased memory usage.
-\end{itemize}
-
-\paragraph{Capacity Factor 4 (highest overhead)}
-\begin{itemize}
-    \item \textbf{5--10\,ms slower} than capacity factor 2.
-    \item Initialization and memory operations increase disproportionately.
-    \item Device-to-host + cleanup time rises up to 5.26\,ms (compared to 2.71\,ms for CF=2).
-\end{itemize}
-
-\subsection{Impact of Voxel Size}
-Smaller voxel sizes generate a significantly larger number of unique voxel entries. This favors the hash-table method with a low capacity factor, as the Morton approach becomes less efficient when spatial data is highly fragmented.
-
-For larger voxels (e.g., voxel size 1.25), the Morton method benefits from predictable spatial coherence and memory access patterns, making it more efficient than the hash-based approach.
-
-\subsection{Impact of Block Size}
-\begin{itemize}
-    \item \textbf{Block sizes 1--4:} Strong performance penalties due to insufficient warp utilization.
-    \item \textbf{Block sizes 8--256:} Optimal performance range with minimal overhead.
-    \item \textbf{Block sizes 512--1024:} No significant improvements; potentially limited by register pressure.
-\end{itemize}
-
-\subsection{Timing Breakdown}
-
-\subsubsection{Morton Method}
-Dominant phases:
-\begin{enumerate}
-    \item \textbf{Sorting:} 0.90--1.02\,ms (consistent across tests)
-    \item \textbf{Morton code computation:} 0.04--1.07\,ms (strongly dependent on block size)
-    \item \textbf{Point accumulation:} 0.24--1.08\,ms
-\end{enumerate}
-
-\subsubsection{Hash Method}
-Dominant phases:
-\begin{enumerate}
-    \item \textbf{Device-to-host transfer + cleanup:} 2.71--5.26\,ms (increases with capacity factor)
-    \item \textbf{Initialization:} 0.33--3.71\,ms (proportional to hash-table size)
-    \item \textbf{Populate phase:} 0.31--2.46\,ms (collision-sensitive)
-\end{enumerate}
-
-\subsection{Conclusions}
-
-\subsubsection{Optimal Configurations}
-The analysis indicates that different voxel sizes benefit from different GPU strategies:
-
-\begin{itemize}
-    \item \textbf{Small voxel sizes (0.25--0.5):} Hash-based voxelizer with capacity factor 2 and a block size of 16--32 threads.
-    \item \textbf{Medium voxel sizes (0.75--1.0):} Hash-based voxelizer with capacity factor 2 and a block size of 32 threads.
-    \item \textbf{Large voxel sizes (1.25 and above):} Morton-code voxelizer with a block size between 64 and 256 threads.
-\end{itemize}
-
-\subsubsection{Explanation}
-These optimal configurations follow from the observed behaviour of both voxelization methods:
-
-\begin{enumerate}
-    \item For small voxel sizes, the hash method with capacity factor 2 achieves the highest throughput due to low memory overhead and efficient device-to-host transfers.
-    \item For larger voxel sizes, the Morton-based approach becomes more efficient thanks to spatial coherence and predictable memory access patterns.
-    \item Block sizes between 16 and 64 threads provide the most balanced performance in terms of occupancy and register usage.
-\end{enumerate}
-
-\subsubsection{Performance Limitations}
-Despite their strengths, both methods exhibit certain limitations:
-
-\begin{itemize}
-    \item The hash-based method is primarily constrained by memory bandwidth, especially during device-to-host transfers.
-    \item The Morton-based method is strongly dominated by the sorting stage, which forms its main computational bottleneck.
-    \item For both approaches, increasing block sizes beyond 256 threads yields minimal benefits due to hardware saturation.
-\end{itemize}
-
-\subsection {gpu vs cpu performance}
-% Comparison: CPU vs Minimum GPU Time (Morton and Hash methods)
 \begin{table}[H]
 \centering
-
 \begin{tabular}{|c|c|c|c|c|c|}
 \hline
 \textbf{Voxel Size} & \textbf{CPU (ms)} & \textbf{Morton (ms)} & \textbf{Hash CF2 (ms)} & \textbf{Hash CF3 (ms)} & \textbf{Hash CF4 (ms)} \\
@@ -116,13 +29,12 @@ Despite their strengths, both methods exhibit certain limitations:
 1.25 & 240.00 & 25.18 & 25.85 & 27.24 & 28.28 \\
 \hline
 \end{tabular}
-\caption{CPU vs Minimum GPU Voxelization Time - All Methods}
+\caption{CPU vs Minimum GPU Voxelization Time}
+\label{tab:cpu_min}
 \end{table}
 
-% Comparison: CPU vs Maximum GPU Time (Morton and Hash methods)
 \begin{table}[H]
 \centering
-
 \begin{tabular}{|c|c|c|c|c|c|}
 \hline
 \textbf{Voxel Size} & \textbf{CPU (ms)} & \textbf{Morton (ms)} & \textbf{Hash CF2 (ms)} & \textbf{Hash CF3 (ms)} & \textbf{Hash CF4 (ms)} \\
@@ -134,9 +46,49 @@ Despite their strengths, both methods exhibit certain limitations:
 1.25 & 240.00 & 28.64 & 34.41 & 36.85 & 39.06 \\
 \hline
 \end{tabular}
-\caption{CPU vs Maximum GPU Voxelization Time - All Methods}
+\caption{CPU vs Maximum GPU Voxelization Time}
+\label{tab:cpu_max}
 \end{table}
 
-The above tables demonstrate substantial performance improvements when using GPU-based voxelization compared to CPU implementations. Across all tested voxel sizes, the best-performing GPU configurations achieve speedup factors ranging from 9.5× to 15.5×, with the most significant gains observed at smaller voxel sizes where parallelization is most effective. Even in the worst-case GPU scenarios (maximum execution times), the speedup remains impressive at 6.1× to 12.2× faster than CPU execution. The hash-based method with capacity factor 2 consistently delivers optimal performance, achieving minimum execution times between 25.67ms and 27.70ms compared to CPU times of 240.00ms to 429.09ms. Notably, the speedup factor decreases slightly as voxel size increases, suggesting that GPU implementations particularly excel when processing larger numbers of smaller voxels, where the massive parallelism of the GPU architecture can be fully exploited.
-\subsection{Figures of the overall gpu times}
+\subsection{Detailed Analysis of GPU Methods}
+
+\subsubsection{Morton-Code Voxelizer}
+The Morton-based approach demonstrates consistent and predictable performance. It excels at larger voxel sizes (1.25 and above) where spatial coherence is high.
+\begin{itemize}
+    \item \textbf{Timing Breakdown:} The runtime is dominated by the \textbf{sorting stage} (0.90--1.02\,ms), which is constant across tests. Point accumulation takes 0.24--1.08\,ms.
+    \item \textbf{Sensitivity:} Very small block sizes (1--4 threads) significantly slow down Morton-code generation (up to 1.07\,ms), whereas larger blocks stabilize this step to $\approx$0.04\,ms.
+\end{itemize}
+
+\subsubsection{Hash-Table Voxelizer}
+The hash-based method is generally faster for small-to-medium voxel sizes but is highly sensitive to the \textbf{Capacity Factor (CF)}.
+\begin{itemize}
+    \item \textbf{CF 2 (Highest Efficiency):} Offers the best performance (25.67\,ms at voxel size 1.0) due to low memory overhead and fast device-to-host transfers ($\approx$2.71\,ms).
+    \item \textbf{CF 3 \& 4 (Higher Overhead):} Increasing the table size reduces collisions but incurs significant penalties in initialization and memory transfer. CF 4 is 5--10\,ms slower than CF 2, with transfer times rising to 5.26\,ms.
+\end{itemize}
+
+\subsection{Parameter Sensitivity and Bottlenecks}
+
+\subsubsection{Impact of Voxel Size}
+Smaller voxel sizes generate a larger number of unique entries. This favors the \textbf{Hash-Table (CF 2)} method, which handles high fragmentation efficiently. Conversely, larger voxel sizes favor the \textbf{Morton} method, which benefits from predictable memory access patterns when spatial data is less fragmented.
+
+\subsubsection{Impact of Block Size}
+Both methods exhibit similar responses to thread block sizing:
+\begin{itemize}
+    \item \textbf{1--4 threads (Inefficient):} Severe performance penalties due to insufficient warp utilization.
+    \item \textbf{8--256 threads (Optimal):} The "sweet spot" with minimal overhead.
+    \item \textbf{512--1024 threads (Saturated):} No significant improvement; performance is likely limited by register pressure.
+\end{itemize}
+
+\subsection{Conclusions and Optimal Configurations}
+
+Based on the analysis, the optimal strategy depends on the target voxel resolution:
+
+\begin{enumerate}
+    \item \textbf{Small Voxel Sizes (0.25--0.5):} Use the \textbf{Hash-based voxelizer (CF 2)} with a block size of 16--32 threads. It maximizes throughput by minimizing memory overhead.
+    \item \textbf{Large Voxel Sizes (1.25+):} Use the \textbf{Morton-code voxelizer} with a block size of 64--256 threads. It leverages spatial coherence to outperform the hash method.
+\end{enumerate}
+
+\textbf{Limitations:} The Hash method is primarily bound by memory bandwidth (device-to-host transfer), while the Morton method is strictly bottlenecked by the sorting phase.
+
+\subsection{Visualizing Global Performance}
 \input{figures}
