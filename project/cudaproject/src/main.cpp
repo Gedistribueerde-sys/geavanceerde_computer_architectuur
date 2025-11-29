@@ -36,6 +36,23 @@ int main(int argc, char** argv) {
         voxelizeMortonOnGPU(dummy, 3, 1.0f ,256);
     }
     cout << "GPU warmed up.\n\n";
+/*
+    cout << "=== CPU Voxelization (100 runs average) ===" << endl;
+    const int runs = 100;
+    double totalTimeMs = 0.0;
+    vector<Point> voxelizedCPU; // declare outside to avoid realloc inside timing loop
+    for (int i = 0; i < runs; i++) {
+        auto cpuStart = chrono::high_resolution_clock::now();
+        voxelizedCPU = voxerlizerMortonOnCPU(pcVecs, totalPoints, voxelSize);
+        auto cpuEnd = chrono::high_resolution_clock::now();
+        double cpuTimeMs = chrono::duration<double, milli>(cpuEnd - cpuStart).count();
+        totalTimeMs += cpuTimeMs;
+    }
+    double avgTimeMs = totalTimeMs / runs;
+    cout << "CPU voxels (last run): " << voxelizedCPU.size() << endl;
+    cout << "Average CPU time over " << runs << " runs: "
+        << fixed << setprecision(2) << avgTimeMs << " ms\n\n";
+*/
 
     // CPU Voxelization
     cout << "=== CPU Voxelization ===" << endl;

@@ -8,17 +8,13 @@
 #include <chrono> // added for timing
 
 
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-#include <thrust/reduce.h>
-#include <thrust/iterator/zip_iterator.h>
-#include <thrust/tuple.h>
-#include <thrust/unique.h>
-#include <thrust/copy.h>
-#include <thrust/host_vector.h>
-#include <thrust/execution_policy.h>
 #include <algorithm>
-// the same functions that were used in the morton encoder
+
+/*
+The morton approach for the encoding can be found here:
+https://www.forceflow.be/2013/10/07/morton-encodingdecoding-through-bit-interleaving-implementations/
+*/
+// functions are used in both the voxelizers
 __device__ __host__ inline uint64_t splitBy3(uint64_t v) {
     v = (v | (v << 32)) & 0x1f00000000ffffULL;
     v = (v | (v << 16)) & 0x1f0000ff0000ffULL;
@@ -33,7 +29,6 @@ __device__ __host__ inline uint64_t mortonEncode(uint32_t x, uint32_t y, uint32_
            (splitBy3((uint64_t)y) << 1) | 
             splitBy3((uint64_t)z);
 }
-
 
 //https://niessnerlab.org/papers/2013/4hashing/niessner2013hashing.pdf
 

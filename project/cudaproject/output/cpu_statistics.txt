@@ -1,0 +1,15 @@
+Voxel size: 0.25
+Average CPU time over 100 runs: 429.09 ms
+
+Voxel size: 0.5
+Average CPU time over 100 runs: 335.89 ms
+
+Voxel size: 0.75
+Average CPU time over 100 runs: 272.39 ms
+
+Voxel size: 1
+Average CPU time over 100 runs: 253.67 ms
+
+Voxel size: 1.25
+Average CPU time over 100 runs: 240.00 ms
+
