@@ -1,0 +1,101 @@
+\documentclass[a4paper,10pt]{article}
+
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage[colorlinks, linkcolor=black, citecolor=black, urlcolor=black]{hyperref}
+\usepackage{geometry}
+\geometry{tmargin=3cm, bmargin=2.2cm, lmargin=2.2cm, rmargin=2cm}
+\usepackage{todonotes} %Used for the figure placeholders
+\usepackage{ifthen}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{pgfplots}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{xcolor} % good practice to load this explicitly before using \color
+\usepackage{url} % of \usepackage{hyperref}
+
+% Your name and student number must be filled in on the title page found in
+% titlepage.tex.
+\lstdefinelanguage{CUDA}{
+  language=C++,
+  morekeywords={
+    __global__, __device__, __host__, __shared__, __constant__,
+    __syncthreads, __threadfence_block, __threadfence, __threadfence_system,
+    threadIdx, blockIdx, blockDim, gridDim
+  },
+  sensitive=true
+}
+
+% Algemene stijl
+\lstset{
+  language=CUDA,            % Use custom defined language
+    basicstyle=\ttfamily\footnotesize,      % Monospaced font, small
+    keywordstyle=[1]\color{blue}\bfseries,  % Mnemonics in blue and bold
+    keywordstyle=[2]\color{purple},         % Registers in purple
+    keywordstyle=[3]\color{brown}\bfseries, % Labels in brown and bold
+    keywordstyle=[4]\color{teal}\bfseries,  % Constants and preprocessor in teal
+    commentstyle=\color{gray},              % Comments in gray
+    stringstyle=\color{red},                % Strings in red
+    numbers=left,                           % Line numbers on the left
+    numberstyle=\tiny\color{gray},          % Line number style
+    stepnumber=1,                           % Line numbering step
+    numbersep=5pt,                          % Space between line numbers and code
+    breaklines=true,                        % Line breaking
+    backgroundcolor=\color{gray!20},        % Light gray background
+    frame=single,                           % Single frame around the code block
+    captionpos=b,                           % Caption position at the bottom
+    escapeinside={\%*}{*)},                 % Escape to LaTeX with %*...*)
+}
+
+\begin{document}
+\newboolean{anonymize}
+% Uncomment to create an anonymized version of your report
+%\setboolean{anonymize}{true}
+
+\input{titlepage}
+
+\tableofcontents
+\newpage
+\section{Introduction}
+This report talks about the implementation of a point cloud to voxel grid filter.
+\input{theory}
+\section{Implementation}
+In this chapter, the practical implementation details of the point cloud to voxel grid filter are presented. To leverage the massive parallelism of modern hardware, the algorithms were developed using CUDA for GPU acceleration. Two distinct parallel strategies were designed to solve the voxelization problem: a sorting-based approach using Morton encoding, and a scattering approach using a GPU-resident dynamic hash map.
+
+\section{Morton and Sort Voxelizer}
+The first approach utilizes the Thrust library to perform a sort-and-reduce operation. This method relies on the principle of organizing data such that points belonging to the same voxel are stored contiguously in memory.
+
+The algorithm proceeds in the following stages:
+\begin{enumerate}
+    \item Quantization: First, the global bounding box of the point cloud is calculated. For every point, discrete grid coordinates are computed based on the user-defined voxel size.
+    \item Encoding: The 3D grid coordinates are mapped to a 1D scalar value using Z-order curve encoding. This is achieved by bit-interleaving the integer coordinates to produce a 64-bit integer, which serves as the unique key for the voxel.
+    \item Sorting: The point indices are sorted based on their generated Morton codes. This ensures that all points residing in the same spatial voxel are grouped together in the linear array.
+    \item Reduction: A reduction-by-key operation is performed. This step iterates through the sorted array, identifies segments of identical Morton codes, and sums the coordinate and color data for each segment.
+    \item Centroid Calculation: Finally, the accumulated sums are divided by the point count per voxel to yield the final downsampled point cloud.
+\end{enumerate}
+
+The theoretical complexity of this approach is dominated by the sorting phase. Given N input points, the time complexity is O(N log N). This method offers deterministic memory usage and stable performance regardless of the spatial distribution of the points.
+
+\section{Dynamic Hash Map Voxelizer}
+The second approach implements a custom open-addressing hash table directly in GPU global memory. This method is designed for maximum throughput, avoiding the global synchronization overhead required by sorting.
+
+Crucially, this implementation re-purposes the Morton encoding scheme employed in the previous method. Instead of using the code for sorting, the 64-bit Morton integer serves as a compact, unique hash key. This allows a complex three-dimensional coordinate triplet to be treated as a single primitive type, enabling efficient atomic operations within the hardware registers.
+
+The architecture operates through a high-throughput scatter-and-accumulate pipeline:
+\begin{enumerate}
+    \item Initialization: A hash table is allocated in VRAM. To mitigate the risk of collisions inherent to hashing, the capacity is set significantly larger than the number of input points (typically a factor of 2.0 to 4.0).
+    \item Insertion and Accumulation: A custom kernel processes points in parallel. For each point, the grid coordinates are converted into a Morton code. This code is then hashed to find an initial slot in the table. The algorithm uses a linear probing strategy combined with lock-free atomic primitives:
+    \begin{itemize}
+        \item A thread attempts to claim a bucket using an atomic Compare-and-Swap (\texttt{atomicCAS}).
+        \item If the bucket is empty, the thread successfully claims the voxel ownership.
+        \item If the bucket holds the same Morton key, the thread accumulates its point data into the existing voxel using \texttt{atomicAdd}.
+        \item If the bucket is occupied by a different key (a collision), the thread probes the subsequent memory slot until a valid location is found.
+    \end{itemize}
+    \item Compaction: Because the hashing process leaves gaps in the table, a final collection pass scans the memory to extract only the valid, populated voxels and writes them densely into the output buffer.
+\end{enumerate}
+
+Ideally, this approach achieves O(N) complexity, processing each point in constant time. By treating the Morton code as a hash key, the algorithm creates a "race" where threads compete to update voxel data simultaneously. While this is generally faster than sorting, performance is sensitive to the load factor. As the table fills, threads must probe further to find open slots, which can degrade performance. However, for massive point clouds with sufficient memory available, this method typically yields the highest processing speeds.\section{Results}
+\input{figures}
+\input{bibliography}
+\end{document}

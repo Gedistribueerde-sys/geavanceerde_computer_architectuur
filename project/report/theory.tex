@@ -1,0 +1,33 @@
+\section{Theory}
+
+\subsection{Point Cloud}
+A \textbf{point cloud} is a collection of data points defined in a three-dimensional coordinate system.  
+Each point represents a position in space, typically described by $(x, y, z)$ coordinates.  
+Point clouds are commonly acquired using 3D scanners, LiDAR sensors, or photogrammetry systems.  
+They are used in applications such as 3D modeling, robotics, mapping, and computer vision.
+
+\subsection{Voxel}
+A \textbf{voxel} (volumetric pixel) is the smallest unit of a 3D grid, similar to how a pixel is the smallest unit of a 2D image.  
+Voxels divide 3D space into uniform cubes, allowing volumetric representations of shapes or environments.  
+They are used in 3D reconstruction, simulation, gaming, and medical imaging.
+
+\subsection{Pointcloud to Voxel Grid Filtering}
+\textbf{Pointcloud to voxel grid filtering} converts an unstructured point cloud into a regular 3D grid.  
+Space is divided into equal-sized voxels, and each point is assigned to its corresponding voxel.  
+This reduces data density, removes redundant points, and creates a structured representation that is easier and faster to process for tasks such as downsampling and spatial queries.
+
+\subsection{Morton Codes}
+\textbf{Morton codes} (also called Z-order curves) are a method of encoding multi-dimensional coordinates into a single integer value.  
+They work by bit-interleaving the binary coordinates (e.g., $x$, $y$, $z$).  
+This encoding preserves spatial locality, making it useful for data structures such as octrees and for accelerating spatial queries on GPUs.
+
+\subsection{CUDA Thrust Library}
+The \textbf{CUDA Thrust library} is a parallel algorithms library for NVIDIA GPUs.  
+It provides high-level abstractions similar to the C++ Standard Template Library (STL), including parallel sorting, scanning, reduction, and vector operations.  
+Thrust simplifies GPU programming by offering ready-to-use, highly optimized parallel primitives.
+
+\subsection{LAS Files}
+\textbf{LAS files} are a standardized file format used for storing LiDAR point cloud data.  
+The format supports 3D coordinates, intensity values, classification labels, GPS time, color information, and other metadata.  
+LAS is widely used in geospatial applications, surveying, and remote sensing due to its efficiency and interoperability.
+
