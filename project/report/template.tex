@@ -58,45 +58,17 @@
 \tableofcontents
 \newpage
 \section{Introduction}
+
 This report talks about the implementation of a point cloud to voxel grid filter. The reason for implementing this filter is to reduce the number of points in a point cloud, while preserving the overall structure and appearance of the original data. Doing this on a CPU takes a long time for large point clouds, so the filter is implemented on a GPU using CUDA to take advantage of the parallel processing capabilities of modern graphics hardware.
-\section{Implementation}
-In this chapter, the practical implementation details of the point cloud to voxel grid filter are presented. To leverage the massive parallelism of modern hardware, the algorithms were developed using CUDA for GPU acceleration. Two distinct parallel strategies were designed to solve the voxelization problem: a sorting-based approach using Morton encoding, and a scattering approach using a GPU-resident dynamic hash map.
+\input{theory}
 
-\subsection{Morton and Sort Voxelizer}
-The first approach utilizes the Thrust library to perform a sort-and-reduce operation. This method relies on the principle of organizing data such that points belonging to the same voxel are stored contiguously in memory.
+\section {Voxel size}
+The voxel size is an important parameter in the point cloud to voxel filter. The bigger the voxel size ,the more points will be grouped together into a single voxel, resulting in a coarser representation of the original point cloud. Conversely, a smaller voxel size will result in a finer representation, with more voxels and fewer points per voxel.
 
-The algorithm proceeds in the following stages:
-\begin{enumerate}
-    \item Quantization: First, the global bounding box of the point cloud is calculated. For every point, discrete grid coordinates are computed based on the user-defined voxel size.
-    \item Encoding: The 3D grid coordinates are mapped to a 1D scalar value using Z-order curve encoding. This is achieved by bit-interleaving the integer coordinates to produce a 64-bit integer, which serves as the unique key for the voxel.
-    \item Sorting: The point indices are sorted based on their generated Morton codes. This ensures that all points residing in the same spatial voxel are grouped together in the linear array.
-    \item Reduction: A reduction-by-key operation is performed. This step iterates through the sorted array, identifies segments of identical Morton codes, and sums the coordinate and color data for each segment.
-    \item Centroid Calculation: Finally, the accumulated sums are divided by the point count per voxel to yield the final downsampled point cloud.
-\end{enumerate}
-
-The theoretical complexity of this approach is dominated by the sorting phase. Given N input points, the time complexity is O(N log N). This method offers deterministic memory usage and stable performance regardless of the spatial distribution of the points.
-
-\subsection{Dynamic Hash Map Voxelizer}
-The second approach implements a custom open-addressing hash table directly in GPU global memory. This method is designed for maximum throughput, avoiding the global synchronization overhead required by sorting.
-
-Crucially, this implementation re-purposes the Morton encoding scheme employed in the previous method. Instead of using the code for sorting, the 64-bit Morton integer serves as a compact, unique hash key. This allows a complex three-dimensional coordinate triplet to be treated as a single primitive type, enabling efficient atomic operations within the hardware registers.
-
-The architecture operates through a high-throughput scatter-and-accumulate pipeline:
-\begin{enumerate}
-    \item Initialization: A hash table is allocated in VRAM. To mitigate the risk of collisions inherent to hashing, the capacity is set significantly larger than the number of input points (typically a factor of 2.0 to 4.0).
-    \item Insertion and Accumulation: A custom kernel processes points in parallel. For each point, the grid coordinates are converted into a Morton code. This code is then hashed to find an initial slot in the table. The algorithm uses a linear probing strategy combined with lock-free atomic primitives:
-    \begin{itemize}
-        \item A thread attempts to claim a bucket using an atomic Compare-and-Swap (\texttt{atomicCAS}).
-        \item If the bucket is empty, the thread successfully claims the voxel ownership.
-        \item If the bucket holds the same Morton key, the thread accumulates its point data into the existing voxel using \texttt{atomicAdd}.
-        \item If the bucket is occupied by a different key (a collision), the thread probes the subsequent memory slot until a valid location is found.
-    \end{itemize}
-    \item Compaction: Because the hashing process leaves gaps in the table, a final collection pass scans the memory to extract only the valid, populated voxels and writes them densely into the output buffer.
-\end{enumerate}
-
-Ideally, this approach achieves O(N) complexity, processing each point in constant time. By treating the Morton code as a hash key, the algorithm creates a "race" where threads compete to update voxel data simultaneously. While this is generally faster than sorting, performance is sensitive to the load factor. As the table fills, threads must probe further to find open slots, which can degrade performance. However, for massive point clouds with sufficient memory available, this method typically yields the highest processing speeds.
+\input{implementation}
 \section{Results and Analysis}
-
+\subsection{Timing remarks and methodology}
+All the following results were obtained on relatively old hardware: a NVIDIA Geforce GTX 1080ti with 11GB of GDDR5X memory, paired with an Intel Core i7-8700K CPU @ 4.8 GHz and 32GB of DDR4 RAM and the pc runs ubuntu 24.04.3 LTS. The point cloud used for testing contains 648433 points, representing a dense scan of an urban environment.
 \subsection{General Observations}
 The voxelizers are compared among five voxel sizes (0.25, 0.5, 0.75, 1.0, 1.25). For each voxel size, eight block sizes were tested (1, 2, 4, 8, 16, 32, 64, 256, 512, 1024 threads per block). The hash-table voxelizer was evaluated with three different capacity factors (2, 3, and 4 times the number of input points). The performance metrics recorded include total execution time and a breakdown of time spent in key phases of each algorithm.
 Every configuration was run 100 times to obtain an average execution time, minimizing the impact of transient system load variations.
@@ -196,8 +168,14 @@ Despite their strengths, both methods exhibit certain limitations:
     \item For both approaches, increasing block sizes beyond 256 threads yields minimal benefits due to hardware saturation.
 \end{itemize}
 
+\subsection {gpu vs cpu performance}
+\textbf{TODOOOOOOOOOOOOOOOOOOOOOOOOOO}
+
 
 \input{figures}
+\section{Visualisation}
+Everything was visualised using the python open3d library. This library allows for easy loading and displaying of point clouds. The original point cloud and the voxelized point cloud were displayed side by side for comparison.
+\textbf{TODOOOO : paste figures}
 \section{Possible Improvements}
 The main problem is that both implementations work with a fixed voxel size. This means that if the point cloud is very large but sparse, a lot of memory is wasted on empty space. A possible improvement would be to implement an octree structure, which would allow for variable voxel sizes depending on the density of points in a given area.
 

@@ -1,0 +1,339 @@
+\section{Implementation}
+In this chapter, the practical implementation details of the point cloud to voxel grid filter are presented. To leverage the massive parallelism of modern hardware, the algorithms were developed using CUDA for GPU acceleration. Two distinct parallel strategies were designed to solve the voxelization problem: a sorting-based approach using Morton encoding, and a scattering approach using a GPU-resident dynamic hash map.
+
+Both voxelizers are built on top of a small set of shared GPU primitives: (i) Morton code generation, (ii) a per-voxel accumulation structure, and (iii) a binary reduction functor. These components are declared once in a common header so that both implementations refer to the same definitions. This guarantees that voxel identities and accumulation semantics are consistent across all backends and avoids code duplication.
+
+\subsection{Shared GPU Primitives}
+
+\paragraph{Morton code generation.}
+The first shared building block is the mapping from 3D integer voxel coordinates $(i_x,i_y,i_z)$ to a single 64-bit Morton code. This mapping is reused in both voxelizers: in the sorting-based pipeline it is used to generate keys for \texttt{thrust::sort\_by\_key}, while in the hash-based pipeline the same 64-bit Morton code serves directly as the hash key for open addressing.
+
+The helper function \texttt{splitBy3} expands a 21-bit integer into a 64-bit value in which each original bit is separated by two zero bits:
+
+\begin{lstlisting}[language=CUDA,caption={Bit expansion of a 21-bit coordinate into Morton layout (shared).}]
+__device__ __host__ inline uint64_t splitBy3(uint64_t v) {
+    v = (v | (v << 32)) & 0x1f00000000ffffULL;
+    v = (v | (v << 16)) & 0x1f0000ff0000ffULL;
+    v = (v | (v <<  8)) & 0x100f00f00f00f00fULL;
+    v = (v | (v <<  4)) & 0x10c30c30c30c30c3ULL;
+    v = (v | (v <<  2)) & 0x1249249249249249ULL;
+    return v;
+}
+\end{lstlisting}
+
+Using \texttt{splitBy3}, the actual Morton code is formed by interleaving the expanded bits of the three coordinates:
+
+\begin{lstlisting}[language=CUDA,caption={Morton encoding of 3D voxel indices (shared).}]
+__device__ __host__ inline uint64_t mortonEncode(uint32_t x,
+                                                 uint32_t y,
+                                                 uint32_t z) {
+    return (splitBy3((uint64_t)x) << 2) |
+           (splitBy3((uint64_t)y) << 1) |
+            splitBy3((uint64_t)z);
+}
+\end{lstlisting}
+
+Both functions are marked \texttt{\_\_device\_\_ \_\_host\_\_ inline}, so they can be called from host utility code as well as from device kernels in both voxelizers.
+
+\paragraph{Per-voxel accumulation structure.}
+The second shared component is a small aggregation structure, \texttt{PointAccum}, used to collect sums of positions and colors along with a point count. This abstraction decouples the accumulation logic from the particular parallelization strategy (sorting vs. hashing):
+
+\begin{lstlisting}[language=CUDA,caption={Accumulation structure for voxel-wise reduction (shared).}]
+struct PointAccum {
+    float    sumX, sumY, sumZ;
+    uint32_t sumR, sumG, sumB;
+    uint32_t count;
+    
+    __device__ __host__ PointAccum()
+        : sumX(0), sumY(0), sumZ(0),
+          sumR(0), sumG(0), sumB(0),
+          count(0) {}
+
+    __device__ __host__ PointAccum(float x, float y, float z,
+                                   uint8_t r, uint8_t g, uint8_t b)
+        : sumX(x), sumY(y), sumZ(z),
+          sumR(r), sumG(g), sumB(b),
+          count(1) {}
+};
+\end{lstlisting}
+
+\paragraph{Binary reduction functor.}
+Finally, the binary functor \texttt{PointAccumOp} defines how two partial accumulators are merged. In the Morton-and-sort voxelizer it is passed to \texttt{thrust::reduce\_by\_key}, and the same semantics can be reused anywhere voxel-wise statistics need to be combined:
+
+\begin{lstlisting}[language=CUDA,caption={Binary operator for reducing \texttt{PointAccum} values (shared).}]
+struct PointAccumOp {
+    __device__ __host__
+    PointAccum operator()(const PointAccum& a,
+                          const PointAccum& b) const {
+        PointAccum result;
+        result.sumX  = a.sumX  + b.sumX;
+        result.sumY  = a.sumY  + b.sumY;
+        result.sumZ  = a.sumZ  + b.sumZ;
+        result.sumR  = a.sumR  + b.sumR;
+        result.sumG  = a.sumG  + b.sumG;
+        result.sumB  = a.sumB  + b.sumB;
+        result.count = a.count + b.count;
+        return result;
+    }
+};
+\end{lstlisting}
+
+Declaring these primitives in a shared header ensures that both voxelizers operate on identical Morton keys and apply the same centroid and color averaging rules.
+
+\subsection{Morton and Sort Voxelizer}
+
+To implement the Morton sort voxelizer efficiently on the GPU, we decompose the pipeline into a small set of reusable building blocks: (i) Morton code generation via the shared \texttt{mortonEncode} helper, (ii) per-voxel accumulation of point attributes using \texttt{PointAccum} and \texttt{PointAccumOp}, and (iii) CUDA kernels that bridge raw device arrays with Thrust's sort-and-reduce primitives. This section focuses on the kernels specific to the sorting-based implementation and on how they are orchestrated from the outer host function.
+
+\paragraph{Morton code computation kernel.}
+The first CUDA kernel takes the input point positions and converts them into Morton codes. Each thread processes exactly one point, computes its voxel indices based on the global bounding box and voxel size, and then encodes these indices using the shared \texttt{mortonEncode}:
+
+\begin{lstlisting}[language=CUDA,caption={Kernel computing Morton codes for each point.}]
+__global__ void computeMortonCodesKernel(
+    const float* x,
+    const float* y,
+    const float* z,
+    uint64_t* mortonCodes,
+    float minX, float minY, float minZ,
+    float invVoxelSize,
+    size_t numPoints)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numPoints) return;
+
+    // Compute voxel indices (offset by min to ensure non-negative indices)
+    uint32_t ix = (uint32_t)floorf((x[idx] - minX) * invVoxelSize);
+    uint32_t iy = (uint32_t)floorf((y[idx] - minY) * invVoxelSize);
+    uint32_t iz = (uint32_t)floorf((z[idx] - minZ) * invVoxelSize);
+
+    mortonCodes[idx] = mortonEncode(ix, iy, iz);
+}
+\end{lstlisting}
+
+The kernel assumes a structure-of-arrays (SoA) layout (\texttt{x}, \texttt{y}, \texttt{z} in separate buffers), which yields coalesced memory accesses on the GPU. The inverse voxel size \texttt{invVoxelSize} is precomputed on the host to avoid a division in the kernel.
+
+\paragraph{Accumulator creation kernel.}
+After sorting the points by their Morton codes, we construct a \texttt{PointAccum} object for each point in sorted order. Instead of physically reordering all coordinate and color arrays, we maintain a separate index array \texttt{indices} that encodes the permutation induced by the sort:
+
+\begin{lstlisting}[language=CUDA,caption={Kernel creating \texttt{PointAccum} objects after sorting.}]
+__global__ void createPointAccumKernel(
+    const float*  x,
+    const float*  y,
+    const float*  z,
+    const uint8_t* r,
+    const uint8_t* g,
+    const uint8_t* b,
+    const uint32_t* indices,
+    PointAccum* accums,
+    size_t numPoints)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numPoints) return;
+
+    uint32_t origIdx = indices[idx];
+    accums[idx] = PointAccum(
+        x[origIdx], y[origIdx], z[origIdx],
+        r[origIdx], g[origIdx], b[origIdx]
+    );
+}
+\end{lstlisting}
+
+This design keeps all device arrays in their original layout and uses a single indirection to access the sorted points. It avoids unnecessary data movement and allows Thrust to operate directly on the Morton code and index arrays.
+
+\paragraph{Integration in the outer loop.}
+The outer host function (omitted here for brevity) orchestrates the Morton-and-sort voxelizer as follows:
+
+\begin{enumerate}
+    \item \textbf{Preprocessing:} Compute the global bounding box and \texttt{invVoxelSize} on the CPU.
+    \item \textbf{Device setup:} Upload point coordinates and colors to device vectors; initialize an index array with \texttt{thrust::sequence}.
+    \item \textbf{Morton computation:} Launch \texttt{computeMortonCodesKernel} to fill the Morton code buffer.
+    \item \textbf{Sorting:} Call \texttt{thrust::sort\_by\_key} on the pair \texttt{(d\_mortonCodes, d\_indices)}, grouping points with identical Morton codes into contiguous segments.
+    \item \textbf{Accumulator creation:} Launch \texttt{createPointAccumKernel} to build a \texttt{PointAccum} per sorted point.
+    \item \textbf{Reduction by voxel:} Invoke \texttt{thrust::reduce\_by\_key} with the sorted keys and accumulator values, using \texttt{thrust::equal\_to<uint64\_t>} and the shared \texttt{PointAccumOp}. This yields one accumulator per occupied voxel.
+    \item \textbf{Final averaging:} Copy the reduced accumulators back to the host and divide the sums by \texttt{count} to obtain the centroid position and average color per voxel.
+\end{enumerate}
+
+Because the Morton code computation kernel and the \texttt{PointAccumOp} functor are defined in a shared header, the same primitives can be reused by other backends (such as the hash-map voxelizer) without redefinition.
+
+\subsection{Dynamic Hash Map Voxelizer}
+
+The second approach implements a custom open-addressing hash table directly in GPU global memory. This method is designed for maximum throughput, avoiding the global synchronization overhead required by sorting. Instead of ordering points, it scatters them into a large hash table and accumulates voxel statistics in-place.
+
+As in the previous approach, the 64-bit Morton code generated by the shared \texttt{mortonEncode} function is used as a compact, unique key. Here, the code acts as the hash key for open addressing, allowing a three-dimensional voxel coordinate to be treated as a single scalar that can be compared and updated atomically.
+
+\paragraph{Hash bucket layout.}
+Each entry in the GPU hash table is represented by a tightly packed \texttt{HashBucket} structure:
+
+\begin{lstlisting}[language=CUDA,caption={Aligned hash bucket structure and empty key sentinel.}]
+struct __align__(16) HashBucket {
+    unsigned long long key;  // 64-bit Morton code
+    float sumX, sumY, sumZ;
+    uint32_t sumR, sumG, sumB;
+    uint32_t count;
+};
+
+#define EMPTY_KEY 0xFFFFFFFFFFFFFFFFULL
+\end{lstlisting}
+
+The \texttt{\_\_align\_\_(16)} qualifier ensures that each bucket starts on a 16-byte boundary, which improves memory coalescing and reduces bank conflicts. The special value \texttt{EMPTY\_KEY} acts as a sentinel for uninitialized slots; virtually no valid Morton code will take this all-ones pattern.
+
+\paragraph{Hash table initialization.}
+Before insertion, the hash table must be cleared. The initialization kernel marks all buckets as empty and resets their counters and sums:
+
+\begin{lstlisting}[language=CUDA,caption={Kernel initializing the GPU hash table.}]
+__global__ void initHashMapKernel(HashBucket* table, size_t capacity) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < capacity) {
+        table[idx].key   = EMPTY_KEY;
+        table[idx].count = 0;
+
+        table[idx].sumX = 0.0f;
+        table[idx].sumY = 0.0f;
+        table[idx].sumZ = 0.0f;
+        table[idx].sumR = 0;
+        table[idx].sumG = 0;
+        table[idx].sumB = 0;
+    }
+}
+\end{lstlisting}
+
+\paragraph{Scatter-and-accumulate kernel.}
+The core of the hash-based voxelizer is the \texttt{populateHashMapKernel}. Each thread processes one point: it computes voxel indices, converts them to a Morton code using the shared \texttt{mortonEncode}, and then inserts or accumulates into the hash table using open addressing and atomic operations:
+
+\begin{lstlisting}[language=CUDA,caption={Kernel inserting points into the GPU hash map.}]
+__global__ void populateHashMapKernel(
+    const float*   x, const float*   y, const float*   z,
+    const uint8_t* r, const uint8_t* g, const uint8_t* b,
+    HashBucket* table,
+    size_t capacity,
+    size_t numPoints,
+    float minX, float minY, float minZ,
+    float invVoxelSize)
+{
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= numPoints) return;
+
+    // 1. Quantize position to voxel grid and compute Morton key
+    uint32_t ix = (uint32_t)floorf((x[idx] - minX) * invVoxelSize);
+    uint32_t iy = (uint32_t)floorf((y[idx] - minY) * invVoxelSize);
+    uint32_t iz = (uint32_t)floorf((z[idx] - minZ) * invVoxelSize);
+
+    uint64_t mortonCode = mortonEncode(ix, iy, iz);
+
+    // 2. Initial hash slot
+    size_t hashIdx = mortonCode % capacity;
+
+    // 3. Linear probing with atomic CAS and atomic adds
+    for (size_t i = 0; i < capacity; ++i) {
+        size_t currentSlot = (hashIdx + i) % capacity;
+
+        unsigned long long oldKey = table[currentSlot].key;
+
+        // Try to claim an empty slot
+        if (oldKey == EMPTY_KEY) {
+            unsigned long long assumed =
+                atomicCAS((unsigned long long*)&table[currentSlot].key,
+                          EMPTY_KEY,
+                          (unsigned long long)mortonCode);
+            if (assumed == EMPTY_KEY) {
+                // Successfully claimed the slot; it now belongs to this Morton key
+                oldKey = mortonCode;
+            } else {
+                // Another thread claimed it in the meantime
+                oldKey = assumed;
+            }
+        }
+
+        // Either we found our key, or we collided with another key
+        if (oldKey == mortonCode) {
+            // Accumulate position
+            atomicAdd(&table[currentSlot].sumX, x[idx]);
+            atomicAdd(&table[currentSlot].sumY, y[idx]);
+            atomicAdd(&table[currentSlot].sumZ, z[idx]);
+
+            // Accumulate color
+            atomicAdd(&table[currentSlot].sumR, (uint32_t)r[idx]);
+            atomicAdd(&table[currentSlot].sumG, (uint32_t)g[idx]);
+            atomicAdd(&table[currentSlot].sumB, (uint32_t)b[idx]);
+
+            // Increment point count
+            atomicAdd(&table[currentSlot].count, 1);
+            return; // Done with this point
+        }
+
+        // Otherwise: collision with a different key, continue probing
+    }
+}
+\end{lstlisting}
+
+This kernel realizes a lock-free scatter-and-accumulate pattern: threads compete to claim buckets with \texttt{atomicCAS}, and once ownership is established, they use \texttt{atomicAdd} to update voxel statistics. The shared Morton encoder guarantees that both voxelizers use exactly the same voxel indexing scheme.
+
+\paragraph{Counting valid voxels.}
+Because open addressing leaves empty gaps in the hash table, a compaction pass is required. First, the number of occupied buckets is counted:
+
+\begin{lstlisting}[language=CUDA,caption={Kernel counting the number of occupied buckets.}]
+__global__ void countValidBucketsKernel(
+    HashBucket* table,
+    size_t capacity,
+    uint32_t* counter)
+{
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < capacity) {
+        if (table[idx].key != EMPTY_KEY) {
+            atomicAdd(counter, 1);
+        }
+    }
+}
+\end{lstlisting}
+
+This provides the exact number of output voxels, allowing the host to allocate a tightly packed output array.
+
+\paragraph{Collecting results.}
+Finally, a second pass walks over the hash table and writes the averaged voxel representatives into a compact output array. An atomic counter is used to obtain a unique output index for each valid bucket:
+
+\begin{lstlisting}[language=CUDA,caption={Kernel converting hash buckets into final voxel points.}]
+__global__ void collectResultsKernel(
+    HashBucket* table,
+    size_t capacity,
+    Point* output,
+    uint32_t* globalCounter)
+{
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= capacity) return;
+
+    HashBucket bucket = table[idx];
+
+    if (bucket.key != EMPTY_KEY && bucket.count > 0) {
+        uint32_t outIdx = atomicAdd(globalCounter, 1);
+
+        float c = (float)bucket.count;
+
+        Point p;
+        p.x = bucket.sumX / c;
+        p.y = bucket.sumY / c;
+        p.z = bucket.sumZ / c;
+        p.r = (uint8_t)(bucket.sumR / bucket.count);
+        p.g = (uint8_t)(bucket.sumG / bucket.count);
+        p.b = (uint8_t)(bucket.sumB / bucket.count);
+
+        output[outIdx] = p;
+    }
+}
+\end{lstlisting}
+
+This kernel mirrors the final averaging step of the Morton-and-sort voxelizer, but operates directly on hash buckets instead of reduced accumulators. Since voxel statistics are accumulated using the same semantics as \texttt{PointAccumOp}, the resulting centroids and colors are consistent across both implementations.
+
+\paragraph{Integration in the outer loop.}
+The host-side function that drives the dynamic hash map voxelizer follows these steps:
+
+\begin{enumerate}
+    \item \textbf{Capacity selection:} Choose a hash table capacity as a multiple of the number of points (e.g.\ a factor between 2 and 4) to keep the load factor low and reduce probing lengths.
+    \item \textbf{Bounding box and quantization parameters:} Compute the global bounding box on the CPU and derive \texttt{invVoxelSize}.
+    \item \textbf{Device allocation:} Allocate device arrays for point coordinates and colors and copy the input data to the GPU.
+    \item \textbf{Hash table allocation and initialization:} Allocate a device buffer of \texttt{HashBucket}s and launch \texttt{initHashMapKernel} to mark all buckets as empty.
+    \item \textbf{Scatter-and-accumulate:} Launch \texttt{populateHashMapKernel}, which computes Morton keys (via the shared \texttt{mortonEncode}) and accumulates point statistics into hash buckets using atomic operations.
+    \item \textbf{Voxel counting:} Allocate a single device-side counter, set it to zero, and call \texttt{countValidBucketsKernel} to determine the number of occupied buckets, i.e.\ the number of output voxels.
+    \item \textbf{Output allocation and compaction:} Allocate a device array of \texttt{Point} with \texttt{numVoxels} entries, reset the counter, and launch \texttt{collectResultsKernel} to fill the array with centroid and color averages.
+    \item \textbf{Host transfer and cleanup:} Copy the compact output array back to the host, then free all device buffers.
+\end{enumerate}
+
+Compared to the Morton-and-sort voxelizer, this hash-based approach trades the $O(N \log N)$ sorting phase for an $O(N)$ scatter-and-accumulate phase driven by atomic operations. Because both implementations share the same Morton encoding and accumulation definitions, their outputs are directly comparable: they differ only in how voxel membership is discovered (sorting versus hashing), not in how voxel identities or voxel-averaged attributes are defined.
