@@ -1,71 +1,3 @@
-\documentclass[a4paper,10pt]{article}
-
-\usepackage[english]{babel}
-\usepackage{graphicx}
-\usepackage[colorlinks, linkcolor=black, citecolor=black, urlcolor=black]{hyperref}
-\usepackage{geometry}
-\geometry{tmargin=3cm, bmargin=2.2cm, lmargin=2.2cm, rmargin=2cm}
-\usepackage{todonotes} %Used for the figure placeholders
-\usepackage{ifthen}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
-\usepackage{pgfplots}
-\usepackage{listings}
-\usepackage{float}
-\usepackage{xcolor} % good practice to load this explicitly before using \color
-\usepackage{url} % of \usepackage{hyperref}
-
-% Your name and student number must be filled in on the title page found in
-% titlepage.tex.
-\lstdefinelanguage{CUDA}{
-  language=C++,
-  morekeywords={
-    __global__, __device__, __host__, __shared__, __constant__,
-    __syncthreads, __threadfence_block, __threadfence, __threadfence_system,
-    threadIdx, blockIdx, blockDim, gridDim
-  },
-  sensitive=true
-}
-
-% Algemene stijl
-\lstset{
-  language=CUDA,            % Use custom defined language
-    basicstyle=\ttfamily\footnotesize,      % Monospaced font, small
-    keywordstyle=[1]\color{blue}\bfseries,  % Mnemonics in blue and bold
-    keywordstyle=[2]\color{purple},         % Registers in purple
-    keywordstyle=[3]\color{brown}\bfseries, % Labels in brown and bold
-    keywordstyle=[4]\color{teal}\bfseries,  % Constants and preprocessor in teal
-    commentstyle=\color{gray},              % Comments in gray
-    stringstyle=\color{red},                % Strings in red
-    numbers=left,                           % Line numbers on the left
-    numberstyle=\tiny\color{gray},          % Line number style
-    stepnumber=1,                           % Line numbering step
-    numbersep=5pt,                          % Space between line numbers and code
-    breaklines=true,                        % Line breaking
-    backgroundcolor=\color{gray!20},        % Light gray background
-    frame=single,                           % Single frame around the code block
-    captionpos=b,                           % Caption position at the bottom
-    escapeinside={\%*}{*)},                 % Escape to LaTeX with %*...*)
-}
-
-\begin{document}
-\newboolean{anonymize}
-% Uncomment to create an anonymized version of your report
-%\setboolean{anonymize}{true}
-
-\input{titlepage}
-
-\tableofcontents
-\newpage
-\section{Introduction}
-
-This report talks about the implementation of a point cloud to voxel grid filter. The reason for implementing this filter is to reduce the number of points in a point cloud, while preserving the overall structure and appearance of the original data. Doing this on a CPU takes a long time for large point clouds, so the filter is implemented on a GPU using CUDA to take advantage of the parallel processing capabilities of modern graphics hardware.
-\input{theory}
-
-\section {Voxel size}
-The voxel size is an important parameter in the point cloud to voxel filter. The bigger the voxel size ,the more points will be grouped together into a single voxel, resulting in a coarser representation of the original point cloud. Conversely, a smaller voxel size will result in a finer representation, with more voxels and fewer points per voxel.
-
-\input{implementation}
 \section{Results and Analysis}
 \subsection{Timing remarks and methodology}
 All the following results were obtained on relatively old hardware: a NVIDIA Geforce GTX 1080ti with 11GB of GDDR5X memory, paired with an Intel Core i7-8700K CPU @ 4.8 GHz and 32GB of DDR4 RAM and the pc runs ubuntu 24.04.3 LTS. The point cloud used for testing contains 648433 points, representing a dense scan of an urban environment.
@@ -169,15 +101,42 @@ Despite their strengths, both methods exhibit certain limitations:
 \end{itemize}
 
 \subsection {gpu vs cpu performance}
-\textbf{TODOOOOOOOOOOOOOOOOOOOOOOOOOO}
+% Comparison: CPU vs Minimum GPU Time (Morton and Hash methods)
+\begin{table}[H]
+\centering
 
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\textbf{Voxel Size} & \textbf{CPU (ms)} & \textbf{Morton (ms)} & \textbf{Hash CF2 (ms)} & \textbf{Hash CF3 (ms)} & \textbf{Hash CF4 (ms)} \\
+\hline
+0.25 & 429.09 & 36.61 & 27.70 & 29.57 & 29.10 \\
+0.5 & 335.89 & 29.14 & 26.20 & 28.30 & 28.57 \\
+0.75 & 272.39 & 27.11 & 25.89 & 26.57 & 27.74 \\
+1.0 & 253.67 & 25.71 & 25.67 & 26.99 & 27.46 \\
+1.25 & 240.00 & 25.18 & 25.85 & 27.24 & 28.28 \\
+\hline
+\end{tabular}
+\caption{CPU vs Minimum GPU Voxelization Time - All Methods}
+\end{table}
 
+% Comparison: CPU vs Maximum GPU Time (Morton and Hash methods)
+\begin{table}[H]
+\centering
+
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\textbf{Voxel Size} & \textbf{CPU (ms)} & \textbf{Morton (ms)} & \textbf{Hash CF2 (ms)} & \textbf{Hash CF3 (ms)} & \textbf{Hash CF4 (ms)} \\
+\hline
+0.25 & 429.09 & 40.46 & 35.25 & 37.48 & 41.82 \\
+0.5 & 335.89 & 31.18 & 33.87 & 35.53 & 40.00 \\
+0.75 & 272.39 & 28.62 & 33.80 & 36.09 & 39.12 \\
+1.0 & 253.67 & 27.63 & 33.36 & 35.26 & 38.53 \\
+1.25 & 240.00 & 28.64 & 34.41 & 36.85 & 39.06 \\
+\hline
+\end{tabular}
+\caption{CPU vs Maximum GPU Voxelization Time - All Methods}
+\end{table}
+
+The above tables demonstrate substantial performance improvements when using GPU-based voxelization compared to CPU implementations. Across all tested voxel sizes, the best-performing GPU configurations achieve speedup factors ranging from 9.5× to 15.5×, with the most significant gains observed at smaller voxel sizes where parallelization is most effective. Even in the worst-case GPU scenarios (maximum execution times), the speedup remains impressive at 6.1× to 12.2× faster than CPU execution. The hash-based method with capacity factor 2 consistently delivers optimal performance, achieving minimum execution times between 25.67ms and 27.70ms compared to CPU times of 240.00ms to 429.09ms. Notably, the speedup factor decreases slightly as voxel size increases, suggesting that GPU implementations particularly excel when processing larger numbers of smaller voxels, where the massive parallelism of the GPU architecture can be fully exploited.
+\subsection{Figures of the overall gpu times}
 \input{figures}
-\section{Visualisation}
-Everything was visualised using the python open3d library. This library allows for easy loading and displaying of point clouds. The original point cloud and the voxelized point cloud were displayed side by side for comparison.
-\textbf{TODOOOO : paste figures}
-\section{Possible Improvements}
-The main problem is that both implementations work with a fixed voxel size. This means that if the point cloud is very large but sparse, a lot of memory is wasted on empty space. A possible improvement would be to implement an octree structure, which would allow for variable voxel sizes depending on the density of points in a given area.
-
-\input{bibliography}
-\end{document}

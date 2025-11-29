@@ -16,6 +16,12 @@ They are used in 3D reconstruction, simulation, gaming, and medical imaging.
 Space is divided into equal-sized voxels, and each point is assigned to its corresponding voxel.  
 This reduces data density, removes redundant points, and creates a structured representation that is easier and faster to process for tasks such as downsampling and spatial queries.
 
+\subsection{Voxel Size}
+The \textbf{voxel size} is a critical parameter in pointcloud to voxel grid filtering.  
+It determines the dimensions of each cubic cell in the 3D grid.  
+A larger voxel size groups more points together, resulting in a coarser, more downsampled representation of the original point cloud.  
+Conversely, a smaller voxel size produces a finer representation with higher spatial resolution but increased memory and computational requirements.  
+The choice of voxel size depends on the application and the desired balance between accuracy and efficiency.
 \subsection{Morton Codes}
 \textbf{Morton codes} (also called Z-order curves) are a method of encoding multi-dimensional coordinates into a single integer value.  
 They work by bit-interleaving the binary coordinates (e.g., $x$, $y$, $z$).  

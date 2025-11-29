@@ -1,0 +1,77 @@
+\documentclass[a4paper,10pt]{article}
+
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage[colorlinks, linkcolor=black, citecolor=black, urlcolor=black]{hyperref}
+\usepackage{geometry}
+\geometry{tmargin=3cm, bmargin=2.2cm, lmargin=2.2cm, rmargin=2cm}
+\usepackage{todonotes} %Used for the figure placeholders
+\usepackage{ifthen}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{pgfplots}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{xcolor} % good practice to load this explicitly before using \color
+\usepackage{url} % of \usepackage{hyperref}
+
+% Your name and student number must be filled in on the title page found in
+% titlepage.tex.
+\lstdefinelanguage{CUDA}{
+  language=C++,
+  morekeywords={
+    __global__, __device__, __host__, __shared__, __constant__,
+    __syncthreads, __threadfence_block, __threadfence, __threadfence_system,
+    threadIdx, blockIdx, blockDim, gridDim
+  },
+  sensitive=true
+}
+
+% Algemene stijl
+\lstset{
+  language=CUDA,            % Use custom defined language
+    basicstyle=\ttfamily\footnotesize,      % Monospaced font, small
+    keywordstyle=[1]\color{blue}\bfseries,  % Mnemonics in blue and bold
+    keywordstyle=[2]\color{purple},         % Registers in purple
+    keywordstyle=[3]\color{brown}\bfseries, % Labels in brown and bold
+    keywordstyle=[4]\color{teal}\bfseries,  % Constants and preprocessor in teal
+    commentstyle=\color{gray},              % Comments in gray
+    stringstyle=\color{red},                % Strings in red
+    numbers=left,                           % Line numbers on the left
+    numberstyle=\tiny\color{gray},          % Line number style
+    stepnumber=1,                           % Line numbering step
+    numbersep=5pt,                          % Space between line numbers and code
+    breaklines=true,                        % Line breaking
+    backgroundcolor=\color{gray!20},        % Light gray background
+    frame=single,                           % Single frame around the code block
+    captionpos=b,                           % Caption position at the bottom
+    escapeinside={\%*}{*)},                 % Escape to LaTeX with %*...*)
+}
+
+\begin{document}
+\newboolean{anonymize}
+% Uncomment to create an anonymized version of your report
+%\setboolean{anonymize}{true}
+
+\input{titlepage}
+
+\tableofcontents
+%\listoffigures 
+%\listoftables
+\newpage
+\section{Introduction}
+
+This report talks about the implementation of a point cloud to voxel grid filter. The reason for implementing this filter is to reduce the number of points in a point cloud, while preserving the overall structure and appearance of the original data. Doing this on a CPU takes a long time for large point clouds, so the filter is implemented on a GPU using CUDA to take advantage of the parallel processing capabilities of modern graphics hardware.
+\input{theory}
+
+
+\input{implementation}
+\input{results}
+\section{Visualisation}
+Everything was visualised using the python open3d library. This library allows for easy loading and displaying of point clouds. The original point cloud and the voxelized point cloud were displayed side by side for comparison.
+\textbf{TODOOOO : paste figures}
+\section{Possible Improvements}
+The main problem is that both implementations work with a fixed voxel size. This means that if the point cloud is very large but sparse, a lot of memory is wasted on empty space in the hash map implementation. A possible improvement would be to implement an octree structure, which would allow for variable voxel sizes depending on the density of points in a given area.
+
+\input{bibliography}
+\end{document}
